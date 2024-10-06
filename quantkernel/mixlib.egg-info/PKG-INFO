@@ -1,0 +1,30 @@
+Metadata-Version: 2.1
+Name: mixlib
+Version: 0.1.5+cu121
+Author: Casper Hansen
+License: MIT
+Platform: linux
+Platform: windows
+Classifier: Environment :: GPU :: NVIDIA CUDA :: 11.8
+Classifier: Environment :: GPU :: NVIDIA CUDA :: 12
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Natural Language :: English
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: C++
+Requires-Python: >=3.8.0
+Description-Content-Type: text/markdown
+Requires-Dist: torch>=2.0.0
+Requires-Dist: transformers>=4.34.0
+Requires-Dist: tokenizers>=0.12.1
+Requires-Dist: accelerate
+Requires-Dist: sentencepiece
+Requires-Dist: lm_eval
+Requires-Dist: texttable
+Requires-Dist: toml
+Requires-Dist: attributedict
+Requires-Dist: protobuf
+Requires-Dist: torchvision
+Requires-Dist: tabulate
