@@ -21,7 +21,7 @@ models=(  "Llama-2-1b")
 # models=( "Llama3-Chinese_v2")
 models=( "Qwen2-7B-Instruct" )
 path=/home/cyd/dataset
-for bit in   4  
+for bit in   4  8 
   do
     for model in "${models[@]}"
             do
