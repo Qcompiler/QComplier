@@ -14,9 +14,9 @@ except Exception as ex:
     raise RuntimeError("Your system must have an Nvidia GPU")
 
 common_setup_kwargs = {
-    "version": f"0.1.5+cu{CUDA_VERSION}",
+    "version": f"0.1.7+cu{CUDA_VERSION}",
     "name": "mixlib",
-    "author": "Casper Hansen",
+    "author": "Jidong Zhai, Yidong Chen",
     "license": "MIT",
     "python_requires": ">=3.8.0",
     "long_description_content_type": "text/markdown",
@@ -35,18 +35,7 @@ common_setup_kwargs = {
 }
 
 requirements = [
-    "torch>=2.0.0",
-    "transformers>=4.34.0",
-    "tokenizers>=0.12.1",
-    "accelerate",
-    "sentencepiece",
-    "lm_eval",
-    "texttable",
-    "toml",
-    "attributedict",
-    "protobuf",
-    "torchvision",
-    "tabulate"
+
 ]
 
 def get_include_dirs():
