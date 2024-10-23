@@ -9,5 +9,4 @@ mix_cuda/layernorm/layernorm.cu
 mixlib.egg-info/PKG-INFO
 mixlib.egg-info/SOURCES.txt
 mixlib.egg-info/dependency_links.txt
-mixlib.egg-info/requires.txt
 mixlib.egg-info/top_level.txt

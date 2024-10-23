@@ -70,14 +70,6 @@ def check_dependencies():
             f"Cannot find CUDA_HOME. CUDA must be available to build the package.")
 
 def get_compute_capabilities():
-    # Collect the compute capabilities of all available GPUs.
-    for i in range(torch.cuda.device_count()):
-        major, minor = torch.cuda.get_device_capability(i)
-        cc = major * 10 + minor
-
-        if cc < 75:
-            print("bad GPU!!")
-            #raise RuntimeError("GPUs with compute capability less than 7.5 are not supported.")
 
     # figure out compute capability
     compute_capabilities = { 80, 86, 89, 90}
@@ -120,6 +112,7 @@ else:
             "--expt-relaxed-constexpr",
             "--expt-extended-lambda",
             "--use_fast_math",
+            "-DTHRUST_DEVICE_SYSTEM=THRUST_DEVICE_SYSTEM_CPP",
         ] + arch_flags + generator_flags
     }
 
