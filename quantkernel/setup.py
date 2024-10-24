@@ -98,7 +98,7 @@ if os.name == "nt":
         extra_compile_args={}
 else:
     extra_compile_args={
-        "cxx": ["-g", "-O3", "-fopenmp", "-lgomp", "-std=c++17", "-DENABLE_BF16"],
+        "cxx": ["-g", "-O3", "-fopenmp", "-lgomp", "-std=c++17", "-DENABLE_BF16", "-DTHRUST_DEVICE_SYSTEM=THRUST_DEVICE_SYSTEM_CPP"],
         "nvcc": [
             "-O3", 
             "-std=c++17",
