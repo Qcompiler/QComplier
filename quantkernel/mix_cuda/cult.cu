@@ -1946,6 +1946,7 @@ torch::Tensor int8FusedDequantizeCUDA(
                                                  {y, "y", 4}});
 
   auto D = torch::empty({M, N}, torch::dtype(torch::kF16).device(A.device()));
+  auto work = torch::empty({M, N}, torch::dtype(torch::kF16).device(A.device()));
 
   using Gemm = cutlass::gemm::device::symmetric::GemmDequant<
       int8_t,                          // ElementA
@@ -1974,10 +1975,10 @@ torch::Tensor int8FusedDequantizeCUDA(
       {(cutlass::half_t *)scale_row.data_ptr<torch::Half>(), M},
       Gemm::ElementC(1)};
 
-  auto status = gemmOp(arguments);
+  gemmOp.initialize(arguments, reinterpret_cast<char*>(work.data_ptr<torch::Half>()),
+   at::cuda::getCurrentCUDAStream().stream());
 
-  TORCH_CHECK(status == cutlass::Status::kSuccess,
-              cutlassGetStatusString(status))
+  gemmOp.run(at::cuda::getCurrentCUDAStream().stream());
 
   return D;
 }
