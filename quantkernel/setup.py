@@ -14,7 +14,7 @@ except Exception as ex:
     raise RuntimeError("Your system must have an Nvidia GPU")
 
 common_setup_kwargs = {
-    "version": f"0.1.7+cu{CUDA_VERSION}",
+    "version": f"0.1.8+cu{CUDA_VERSION}",
     "name": "mixlib",
     "author": "Jidong Zhai, Yidong Chen",
     "license": "MIT",
