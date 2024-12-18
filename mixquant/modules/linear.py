@@ -113,14 +113,13 @@ class MixLinear_GEMM(nn.Module):
         quant_linear.weight_cache.copy_(tmp[:, linear.ind].to(tmp.dtype).cuda())  
         quant_linear.ind.copy_(linear.ind.cuda().to(torch.int32))
 
-
-        tmp = linear.weight.data.cuda()
-        tmp[:, linear.ind] = 0
+        
         if bit == 8:
 
             scale =   (torch.max(torch.abs(tmp), dim=1)[0].unsqueeze(1) / (
                         127)).to(torch.float16).reshape((1,linear.out_features))
         else:
+            tmp[:, linear.ind] = 0
             scale =   (torch.max(torch.abs(tmp), dim=1)[0].unsqueeze(1) / (10)).to(torch.float16).reshape((1,linear.out_features))
         
         quant_linear.scale_col.copy_(scale)

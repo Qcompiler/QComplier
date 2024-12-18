@@ -1,12 +1,12 @@
 export PYTHONPATH=/home/chenyidong/QComplier/src
 CMD=" srun  -N 1 --pty --gres=gpu:a100:1 -p octave -A public python "
-CMD=" srun -N 1 --gres=gpu:4090:1 --pty python"
+CMD="   python"
 set -x
 
-
+export PYTHONPATH=/home/cyd/QComplier
 models=( $1 )
 path=$2
-for bit in   4  8 
+for bit in    8 
   do
     for model in "${models[@]}"
             do
