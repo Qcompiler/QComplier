@@ -255,6 +255,8 @@ torch::Tensor mixgemmforward4bit(int M, int N, int K,
                             torch::Tensor &fp_w, torch::Tensor & ind, torch::Tensor & q_w, 
                             torch::Tensor & q_s);
 
+torch::Tensor mixgemmforward_direct(int M, int N, int K, 
+                            torch::Tensor & A_, torch::Tensor &w_, torch::Tensor &s_ );
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("cigemmlt_ampere_32", &cigemmlt_ampere_32, "cigemmlt_ampere_32");
@@ -335,7 +337,11 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
           "mixgemmforward");  
 
     m.def("mixgemmforward4bit", &mixgemmforward4bit,
-          "mixgemmforward4bit");  
+          "mixgemmforward4bit"); 
+
+    m.def("mixgemmforward_direct", &mixgemmforward_direct,
+          "mixgemmforward_direct"); 
+           
 
           
 

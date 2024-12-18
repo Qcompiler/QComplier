@@ -3406,6 +3406,50 @@ torch::Tensor mixgemmforward(int M, int N, int K,
 
 
 
+torch::Tensor mixgemmforward_direct(int M, int N, int K, 
+                            torch::Tensor & A_, torch::Tensor &w_, torch::Tensor &s_ ){
+
+    const cudaStream_t stream = at::cuda::getCurrentCUDAStream();                                
+
+    auto options = torch::TensorOptions().dtype(torch::kFloat16).device(A_.device());  
+    auto fp16_out = torch::zeros(
+        {M, N }, options);
+
+    half * Out = reinterpret_cast<half *>(fp16_out.data_ptr<at::Half>());
+
+    auto options_i8 = torch::TensorOptions().dtype(torch::kInt8).device(A_.device());
+    auto quant_out = torch::zeros(
+      {M, K }, options_i8);
+    int8_t* int8_out = reinterpret_cast<int8_t *>(quant_out.data_ptr<int8_t>());
+
+    auto scale_a_tmp = torch::zeros(
+        {M, 1 }, options);
+    half* scale_a = reinterpret_cast<half *>(scale_a_tmp.data_ptr<at::Half>());
+
+ 
+
+    const half * A = reinterpret_cast<half const*>(A_.data_ptr<at::Half>());
+
+    const int8_t * W = reinterpret_cast<int8_t const*>(w_.data_ptr<int8_t>());
+
+    const half * scale_b = reinterpret_cast<half const* >(s_.data_ptr<at::Half>());
+
+ 
+
+ 
+    cublasHandle_t handle = at::cuda::getCurrentCUDABlasHandle();
+ 
+    cublasSetStream(handle,stream);
+    int8quant_(M, K, A, int8_out, scale_a, stream);
+
+
+    int8FusedDequantizeCUDA_(int8_out, W, scale_a,
+                            scale_b, Out, Out, M, N, K, 
+                            reinterpret_cast<char*>(int8_out),
+                            stream);
+    return fp16_out;
+}
+
 
 torch::Tensor mixgemmforward4bit(int M, int N, int K, 
                             torch::Tensor & A_, torch::Tensor &w_, torch::Tensor &s_,

@@ -3,3 +3,7 @@
 1	102079	1729657775511942139	/home/chenyidong/QComplier/quantkernel/build/temp.linux-x86_64-cpython-311/mix_cuda/mma_permutated.o	3b0c399615670e9d
 1	111681	1729657785107798512	/home/chenyidong/QComplier/quantkernel/build/temp.linux-x86_64-cpython-311/mix_cuda/layernorm/layernorm.o	22c00d98bc7608f8
 0	160278	1729657833691071574	/home/chenyidong/QComplier/quantkernel/build/temp.linux-x86_64-cpython-311/mix_cuda/cult.o	b5e424b385ef9b06
+28	42483	1734502055225586428	/home/cyd/QComplier/quantkernel/build/temp.linux-x86_64-cpython-311/mix_cuda/pybind_mix.o	b4b66915a5a416a
+27	210695	1734502223409921511	/home/cyd/QComplier/quantkernel/build/temp.linux-x86_64-cpython-311/mix_cuda/mma_permutated.o	e31f9b12f2c49dd7
+27	216224	1734502228937936166	/home/cyd/QComplier/quantkernel/build/temp.linux-x86_64-cpython-311/mix_cuda/layernorm/layernorm.o	203cfaad6d506c8
+26	280487	1734502293166120964	/home/cyd/QComplier/quantkernel/build/temp.linux-x86_64-cpython-311/mix_cuda/cult.o	634a0fe522a3fc98
