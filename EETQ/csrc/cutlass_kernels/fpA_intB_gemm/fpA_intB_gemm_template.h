@@ -822,7 +822,7 @@ void CutlassFpAIntBGemmRunner<T, WeightType>::gemm_bias_act_residual(
       candidate_configs, occupancies, m, n, k, 1, split_k_limit,
       workspace_bytes, multi_processor_count_, true);
 
-  if (sm_ >= 80 && sm_ < 90) {
+  if (sm_ >= 80 ) {
     dispatch_gemm_residual<T, WeightType, cutlass::arch::Sm80>(
         chosen_config, A, B, weight_scales, biases, residual, C, m, n, k,
         activation, binary_op, unary_op, workspace_ptr, workspace_bytes,

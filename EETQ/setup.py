@@ -49,14 +49,14 @@ def check_cuda_torch_binary_vs_bare_metal(cuda_dir):
             "You can try commenting out this check (at your own risk)."
         )
 
-_, bare_cuda_version = get_cuda_bare_metal_version(CUDA_HOME)
-if bare_cuda_version >= Version("11.4"):
-    os.environ["TORCH_CUDA_ARCH_LIST"] = "7.0;7.5;8.0;8.6+PTX"
-else:
-    raise RuntimeError(
-        "EETQ is only supported on CUDA 11.4 and above.  "
-        "Your version of CUDA is: {}\n".format(bare_cuda_version)
-    )
+# _, bare_cuda_version = get_cuda_bare_metal_version(CUDA_HOME)
+# if bare_cuda_version >= Version("11.4"):
+#     os.environ["TORCH_CUDA_ARCH_LIST"] = "7.0;7.5;8.0;8.6+PTX"
+# else:
+#     raise RuntimeError(
+#         "EETQ is only supported on CUDA 11.4 and above.  "
+#         "Your version of CUDA is: {}\n".format(bare_cuda_version)
+#     )
 
 ext_modules = []
 
@@ -95,6 +95,27 @@ include_paths.append(os.path.join(current_dir, 'csrc/cutlass_kernels/include'))
 include_paths.append(os.path.join(current_dir, 'csrc/cutlass_extensions/include'))
 
 
+
+def get_compute_capabilities():
+    # Collect the compute capabilities of all available GPUs.
+    for i in range(torch.cuda.device_count()):
+        major, minor = torch.cuda.get_device_capability(i)
+        cc = major * 10 + minor
+
+        if cc < 75:
+            print("bad GPU!!")
+            #raise RuntimeError("GPUs with compute capability less than 7.5 are not supported.")
+
+    # figure out compute capability
+    compute_capabilities = { 80, 86, 89, 90}
+
+    capability_flags = []
+    for cap in compute_capabilities:
+        capability_flags += ["-gencode", f"arch=compute_{cap},code=sm_{cap}"]
+
+    capability_flags += ["-gencode", f"arch=compute_90a,code=sm_90a"]
+    return capability_flags
+arch_flags = get_compute_capabilities()
 ext_modules.append(
     CUDAExtension(
         name="EETQ",
@@ -113,7 +134,10 @@ ext_modules.append(
                      '-U__CUDA_NO_HALF_OPERATORS__',
                      '-U__CUDA_NO_HALF_CONVERSIONS__',
                      '-U__CUDA_NO_HALF2_OPERATORS__',
-                     '-U__CUDA_NO_HALF2_CONVERSIONS__'],
+                     '-U__CUDA_NO_HALF2_CONVERSIONS__',
+                      
+                     
+                     ] + arch_flags,
         },
         define_macros=[('VERSION_INFO', __version__),
                        # ('_DEBUG_MODE_', None),
