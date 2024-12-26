@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,52 +35,11 @@
 
 #pragma once
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef CUTLASS_NAMESPACE
-#define cutlass CUTLASS_NAMESPACE
-#endif
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#define CUTLASS_UNUSED(expr) do { ; } while (&expr != &expr)
-
-#if !defined(__CUDACC_RTC__)
-
-#include <assert.h>
-
-#if defined(_MSC_VER)
-  #define CUTLASS_NOT_IMPLEMENTED() assert(0 && __FUNCSIG__)
-#else
-  #define CUTLASS_NOT_IMPLEMENTED() assert(0 && __PRETTY_FUNCTION__)
-#endif
-
-#else
-
-#if defined(_MSC_VER)
-  #define CUTLASS_NOT_IMPLEMENTED() assert(0 && __FUNCSIG__)
-#else
-  #define CUTLASS_NOT_IMPLEMENTED() assert(0 && __PRETTY_FUNCTION__)
-#endif
-
-#endif
+#include "cutlass/detail/helper_macros.hpp"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 namespace cutlass {
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#if defined(__NVCC__) || (defined(__clang__) && defined(__CUDA__))
-#define CUTLASS_HOST_DEVICE __forceinline__ __device__ __host__
-#define CUTLASS_DEVICE __forceinline__ __device__
-#elif defined(__CUDACC_RTC__)
-#define CUTLASS_HOST_DEVICE __forceinline__ __device__
-#define CUTLASS_DEVICE __forceinline__ __device__
-#else
-#define CUTLASS_HOST_DEVICE inline
-#define CUTLASS_DEVICE inline
-#endif
 
 /// Status code returned by CUTLASS operations
 enum class Status {
@@ -132,49 +91,12 @@ static char const* cutlassGetStatusString(cutlass::Status status) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-#ifndef CUTLASS_CONV_UNIT_TEST_RIGOROUS_SIZE_ENABLED
-#define CUTLASS_CONV_UNIT_TEST_RIGOROUS_SIZE_ENABLED 0
-#endif
-
-
-// CUDA 10.1 introduces the mma instruction
-#if !defined(CUTLASS_ENABLE_TENSOR_CORE_MMA)
-#define CUTLASS_ENABLE_TENSOR_CORE_MMA 0
-#endif
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#define CUTLASS_ASSERT(x) assert(x)
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-// CUTLASS_PRAGMA_(UNROLL|NO_UNROLL) optimization directives for the CUDA compiler.
-#if defined(__CUDA_ARCH__)
-  #if defined(__CUDACC_RTC__) || (defined(__clang__) && defined(__CUDA__))
-    #define CUTLASS_PRAGMA_UNROLL _Pragma("unroll")
-    #define CUTLASS_PRAGMA_NO_UNROLL _Pragma("unroll 1")
-  #else
-    #define CUTLASS_PRAGMA_UNROLL #pragma unroll
-    #define CUTLASS_PRAGMA_NO_UNROLL #pragma unroll 1
-  #endif
-
-  #define CUTLASS_GEMM_LOOP CUTLASS_PRAGMA_NO_UNROLL
-
-#else
-
-    #define CUTLASS_PRAGMA_UNROLL
-    #define CUTLASS_PRAGMA_NO_UNROLL
-    #define CUTLASS_GEMM_LOOP
-
-#endif
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-static const int NUM_THREADS_PER_WARP = 32;
-static const int NUM_THREADS_PER_HALF_WARP = NUM_THREADS_PER_WARP / 2;
-static const int NUM_THREADS_PER_QUAD = 4;
-static const int NUM_THREADS_PER_QUAD_PAIR = NUM_THREADS_PER_QUAD * 2;
+static const int NumThreadsPerWarp = 32;
+static const int NumThreadsPerWarpGroup = 128;
+static const int NumWarpsPerWarpGroup = NumThreadsPerWarpGroup / NumThreadsPerWarp;
+static const int NumThreadsPerHalfWarp = NumThreadsPerWarp / 2;
+static const int NumThreadsPerQuad = 4;
+static const int NumThreadsPerQuadPair = NumThreadsPerQuad * 2;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -184,6 +106,49 @@ CUTLASS_HOST_DEVICE bool thread0() {
     return (!threadIdx.x && !threadIdx.y && !threadIdx.z) && (!blockIdx.x && !blockIdx.y && !blockIdx.z);
   #else
     return false;
+  #endif
+}
+
+/// Returns a lane index in the warp. The threads in warp may not be convergent
+CUTLASS_DEVICE
+int canonical_lane_idx() { 
+  #if defined(__CUDA_ARCH__)
+    return threadIdx.x % NumThreadsPerWarp;
+  #else
+    return 0;
+  #endif
+}
+
+/// Returns a warp-uniform value indicating the canonical warp index of the calling threads.
+/// Threads within the warp must be converged.
+CUTLASS_DEVICE
+int canonical_warp_idx_sync() { 
+  #if defined(__CUDA_ARCH__)
+    return __shfl_sync(0xffffffff, threadIdx.x / NumThreadsPerWarp, 0);
+  #else
+    return 0;
+  #endif
+}
+
+/// Returns a warp index in the CTA. The threads in warp may not be convergent
+/// As it doesn't sync the warp, it faster and allows forward progress
+CUTLASS_DEVICE
+int canonical_warp_idx() { 
+  #if defined(__CUDA_ARCH__)
+    return threadIdx.x / NumThreadsPerWarp;
+  #else
+    return 0;
+  #endif
+}
+
+/// Returns a warp-uniform value indicating the canonical warp group index of the calling threads.
+/// Threads within the warp must be converged.
+CUTLASS_DEVICE
+int canonical_warp_group_idx() {
+  #if defined(__CUDA_ARCH__)
+    return __shfl_sync(0xffffffff, threadIdx.x / NumThreadsPerWarpGroup, 0);
+  #else
+    return 0;
   #endif
 }
 

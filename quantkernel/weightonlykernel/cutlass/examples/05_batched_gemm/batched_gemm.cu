@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -81,7 +81,7 @@ matrix A can be seen as
 ---------------------------------------
      batch 0      |      batch 1
 , where batch size is 2, M is 6 and K is 2
-The stride (batch_stride_B) between the first element of two batches is lda * k
+The stride (batch_stride_A) between the first element of two batches is lda * k
 
 matrix B can be seen as
 -----------------------------
@@ -94,7 +94,7 @@ matrix B can be seen as
 (1,1,0) | (1,1,1) | (1,1,2) |
 -----------------------------
 , where the batch size is 2, N is 3 and K is 2
-The stride (batch_stride_C) between the first element of two batches is k
+The stride (batch_stride_B) between the first element of two batches is k
 
 
 */
@@ -207,15 +207,15 @@ cudaError_t strided_batched_gemm_nn_reference(
   
   cudaError_t result = cudaSuccess;
 
-  if (A.size() < lda * k * batch_count) {
+  if (A.size() < size_t(lda * k * batch_count)) {
     std::cout << "the size of A is too small" << std::endl;
     return cudaErrorInvalidValue;
   }
-  if (B.size() < ldb * n) {
+  if (B.size() < size_t(ldb * n)) {
     std::cout << "the size of B is too small" << std::endl;
     return cudaErrorInvalidValue;
   }
-  if (C.size() < ldc * n * batch_count) {
+  if (C.size() < size_t(ldc * n * batch_count)) {
     std::cout << "the size of C is too small" << std::endl;
     return cudaErrorInvalidValue;
   }

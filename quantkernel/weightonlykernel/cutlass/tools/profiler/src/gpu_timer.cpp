@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -34,7 +34,7 @@
 
 #include <stdexcept>
 
-#include "gpu_timer.h"
+#include "cutlass/profiler/gpu_timer.h"
 
 namespace cutlass {
 namespace profiler {
@@ -94,7 +94,7 @@ void GpuTimer::stop_and_wait(cudaStream_t stream) {
   }
 }
 
-/// Returns the duration in miliseconds
+/// Returns the duration in milliseconds
 double GpuTimer::duration(int iterations) const {
 
   float avg_ms;

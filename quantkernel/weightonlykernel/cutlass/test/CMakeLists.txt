@@ -1,4 +1,4 @@
-# Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # Redistribution and use in source and binary forms, with or without
@@ -26,5 +26,14 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-add_subdirectory(unit)
+if (CUTLASS_ENABLE_GTEST_UNIT_TESTS)
+  add_subdirectory(unit)
+else()
+  # Always provide at least the phony test_unit target.
+  add_custom_target(test_unit)
+endif()
+
+if (CUTLASS_ENABLE_SELF_CONTAINED_INCLUDES_CHECK)
+  add_subdirectory(self_contained_includes)
+endif()
 

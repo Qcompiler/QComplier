@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -230,7 +230,7 @@ public:
       offset_p[s] = (mapped_h + problem_size_.pad_h - filter_r) / problem_size_.stride_h;
       offset_q[s] = (mapped_w + problem_size_.pad_w - filter_s) / problem_size_.stride_w;
 
-      // Intialize pointers for gemm_k=0
+      // Initialize pointers for gemm_k=0
       TensorCoord coord{offset_n[s], offset_p[s], offset_q[s], filter_k_};
 
       pointer_[s] += params_.layout(coord) * sizeof_bits<Element>::value / 8;
@@ -341,7 +341,7 @@ public:
 
         next_idx = 1;
 
-        // Restore bytes in q coordinate (Mma in filter s dimenstion)
+        // Restore bytes in q coordinate (Mma in filter s dimension)
         reset_bytes = reset_bytes_s_;
 
       } else {
@@ -351,7 +351,7 @@ public:
 
         next_idx = 2;
 
-        // Restore bytes in p and q coordinate (Mma in filter s and r dimenstion)
+        // Restore bytes in p and q coordinate (Mma in filter s and r dimension)
         reset_bytes = reset_bytes_r_;
       }
 #else

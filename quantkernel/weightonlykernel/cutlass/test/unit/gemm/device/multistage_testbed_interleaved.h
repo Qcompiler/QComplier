@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -59,6 +59,9 @@ namespace device {
 template <typename Gemm, int InterleavedK>
 struct MultistageInterleavedTestbed {
 
+  using ElementA = typename Gemm::ElementA;
+  using ElementB = typename Gemm::ElementB;
+  using ElementC = typename Gemm::ElementC;
   using ElementAccumulator = typename Gemm::ElementAccumulator;
   using ElementCompute = typename Gemm::GemmKernel::Epilogue::OutputOp::ElementCompute;
 
@@ -102,8 +105,36 @@ struct MultistageInterleavedTestbed {
         view.data(), view.capacity());
     } 
     else {
-      // TODO: Implement the rest
       EXPECT_TRUE(false) << "Not implemented";
+      return false;
+    }
+
+    return true;
+  }
+
+  /// Returns true if the CUDA device is sufficient to execute the kernel.
+  bool sufficient() const {
+    //
+    // Determine SMEM requirements and waive if not satisfied
+    //
+
+    size_t smem_size = sizeof(typename Gemm::GemmKernel::SharedStorage);
+
+    cudaDeviceProp properties;
+    int device_idx;
+    cudaError_t result = cudaGetDevice(&device_idx);
+
+    if (result != cudaSuccess) {
+      throw std::runtime_error("cudaGetDevice() API call failed.");
+    }
+
+    result = cudaGetDeviceProperties(&properties, device_idx);
+
+    if (result != cudaSuccess) {
+      throw std::runtime_error("cudaGetDeviceProperties() failed");
+    }
+
+    if (properties.sharedMemPerMultiprocessor < smem_size) {
       return false;
     }
 
@@ -116,6 +147,14 @@ struct MultistageInterleavedTestbed {
     ElementCompute alpha = ElementCompute(1), 
     ElementCompute beta = ElementCompute(0)) {
     
+    // Waive test if insufficient CUDA device
+    if (!sufficient()) {
+      if (CUTLASS_TEST_UNIT_ENABLE_WARNINGS) {
+        std::cerr << "Test waived due to insufficient CUDA device." << std::endl;
+      }
+      return true;
+    }
+
     //
     // Allocate the GEMM workspace
     //

@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,7 +39,6 @@
 #include "cutlass/gemm/gemm.h"
 #include "cutlass/matrix_coord.h"
 #include "cutlass/gemm/kernel/grouped_problem_visitor.h"
-
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 namespace cutlass {
@@ -50,10 +49,21 @@ namespace kernel {
 
 namespace detail {
 // Helper for correctly representing problem sizes in grouped kernels 
-template <bool Transposed>
+template <
+  typename ThreadblockShape,
+  bool Transposed
+>
 struct GemmGroupedProblemSizeHelper {
 
   static bool const kTransposed = Transposed;
+
+  CUTLASS_HOST_DEVICE
+  static cutlass::gemm::GemmCoord grid_shape(const cutlass::gemm::GemmCoord& problem) {
+    return cutlass::gemm::GemmCoord(
+      ((problem.m() - 1 + ThreadblockShape::kM) / ThreadblockShape::kM),
+      ((problem.n() - 1 + ThreadblockShape::kN) / ThreadblockShape::kN),
+      1);
+  }
 
   CUTLASS_HOST_DEVICE
   static void possibly_transpose_problem(cutlass::gemm::GemmCoord& problem) {
@@ -77,7 +87,7 @@ template <typename ThreadblockShape,
           int ThreadCount,
           bool Transposed = false>
 struct GemmGroupedProblemVisitor : public GroupedProblemVisitor<
-                                            detail::GemmGroupedProblemSizeHelper<Transposed>,
+                                            detail::GemmGroupedProblemSizeHelper<ThreadblockShape, Transposed>,
                                             ThreadblockShape,
                                             GroupScheduleMode_,
                                             PrefetchTileCount,
@@ -85,7 +95,7 @@ struct GemmGroupedProblemVisitor : public GroupedProblemVisitor<
 
   static bool const kTransposed = Transposed;
 
-  using ProblemSizeHelper = detail::GemmGroupedProblemSizeHelper<Transposed>;
+  using ProblemSizeHelper = detail::GemmGroupedProblemSizeHelper<ThreadblockShape, Transposed>;
   using Base = GroupedProblemVisitor<ProblemSizeHelper, ThreadblockShape, GroupScheduleMode_, PrefetchTileCount, ThreadCount>;
   using Params = typename Base::Params;
   using SharedStorage = typename Base::SharedStorage;

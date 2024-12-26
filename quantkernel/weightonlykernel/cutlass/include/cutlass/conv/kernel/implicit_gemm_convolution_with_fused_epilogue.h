@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -61,7 +61,7 @@ template <
   typename Mma_,                                  ///! Threadblock-scoped matrix multiply-accumulate 
   typename Epilogue_,                             ///! Epilogue
   typename ThreadblockSwizzle_,                   ///! Threadblock swizzling function
-  conv::Operator ConvOperator,                    ///! Convolutional operator (Fprop, Dgrad, Wgrad)
+  conv::Operator ConvOperator,                    ///! Convolutional operator (Fprop, Dgrad, Wgrad, Deconv)
   typename ConvProblemSize_ = Conv2dProblemSize   ///! Convolutional operator on 2D or 3D problem
 >
 struct ImplicitGemmConvolutionWithFusedEpilogue {
@@ -257,9 +257,9 @@ struct ImplicitGemmConvolutionWithFusedEpilogue {
       ptr_A(args.ref_A.data()),
       iterator_B(args.problem_size, args.ref_B.layout()),
       ptr_B(args.ref_B.data()),
-      iterator_C(ConvOutputIteratorParameter::layout(args.ref_C)),
+      iterator_C(ConvOutputIteratorParameter::layout(args.ref_C), implicit_gemm_tensor_c_extent(kConvolutionalOperator, args.problem_size)),
       ptr_C(args.ref_C.data()),
-      iterator_D(ConvOutputIteratorParameter::layout(args.ref_D)),
+      iterator_D(ConvOutputIteratorParameter::layout(args.ref_D), implicit_gemm_tensor_c_extent(kConvolutionalOperator, args.problem_size)),
       ptr_D(args.ref_D.data()),
       output_op(args.output_op),
       semaphore(semaphore),
@@ -341,7 +341,7 @@ struct ImplicitGemmConvolutionWithFusedEpilogue {
 
     // Broadcast the warp_id computed by lane 0 to ensure dependent code
     // is compiled as warp-uniform.
-    int warp_idx = __shfl_sync(0xffffffff, threadIdx.x / 32, 0);
+    int warp_idx = canonical_warp_idx_sync();
     int lane_idx = threadIdx.x % 32;
 
     //

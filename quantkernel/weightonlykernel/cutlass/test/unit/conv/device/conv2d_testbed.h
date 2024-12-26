@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -55,7 +55,7 @@
 #include "cutlass/core_io.h"
 #include "cutlass/util/tensor_view_io.h"
 
-#include "cache_testbed_output.h"
+#include "../cache_testbed_output.h"
 
 namespace test {
 namespace conv {
@@ -153,7 +153,6 @@ public:
     else if (dist_kind == cutlass::Distribution::Identity) {
 
       cutlass::reference::host::TensorFillIdentity(view);
-
     } 
     else if (dist_kind == cutlass::Distribution::Gaussian) {
 
@@ -192,7 +191,7 @@ public:
     // Determine SMEM requirements and waive if not satisfied
     //
 
-    int smem_size = int(sizeof(typename Conv2d::ImplicitGemmKernel::SharedStorage));
+    size_t smem_size = sizeof(typename Conv2d::UnderlyingKernel::SharedStorage);
 
     cudaDeviceProp properties;
     int device_idx;
@@ -208,7 +207,7 @@ public:
       throw std::runtime_error("cudaGetDeviceProperties() failed");
     }
 
-    if (properties.sharedMemPerMultiprocessor < smem_size) {
+    if (properties.sharedMemPerBlockOptin < smem_size) {
       return false;
     }
 
@@ -305,15 +304,15 @@ public:
         cutlass::conv::implicit_gemm_tensor_c_size(kConvolutionalOperator, problem_size),
         {
           reinterpret_cast<ElementAccumulator*> (workspace.get()),
-          ReductionStrideIndex(tensor_C.stride()[Conv2d::ImplicitGemmKernel::kTensorCStrideIdx])
+          ReductionStrideIndex(tensor_C.stride()[Conv2d::UnderlyingKernel::kTensorCStrideIdx])
         },
         {
           tensor_D_computed.device_data(),
-          ReductionStrideIndex(tensor_C.stride()[Conv2d::ImplicitGemmKernel::kTensorCStrideIdx])
+          ReductionStrideIndex(tensor_C.stride()[Conv2d::UnderlyingKernel::kTensorCStrideIdx])
         },
         {
           tensor_C.device_data(),
-          ReductionStrideIndex(tensor_C.stride()[Conv2d::ImplicitGemmKernel::kTensorCStrideIdx])
+          ReductionStrideIndex(tensor_C.stride()[Conv2d::UnderlyingKernel::kTensorCStrideIdx])
         },
         // apply alpha, beta to obtain the following equation alpha * ReduceAdd(A * B) + beta * C 
         {alpha, beta} 
@@ -489,7 +488,8 @@ public:
       fname << "error_Conv2d_ImplicitGemm_device_"
         << (split_k_mode == cutlass::conv::SplitKMode::kSerial ? "serial_reduction_" : "parallel_reduction_")
         << (Conv2d::kConvolutionalOperator == cutlass::conv::Operator::kFprop ? "fprop_" :
-            (Conv2d::kConvolutionalOperator == cutlass::conv::Operator::kDgrad ? "dgrad_" : "wgrad_"))
+            (Conv2d::kConvolutionalOperator == cutlass::conv::Operator::kDgrad ? "dgrad_" :
+              (Conv2d::kConvolutionalOperator == cutlass::conv::Operator::kDeconv ? "deconv_" : "wgrad_")))
         << ss_problem_size_text.str()
         << Conv2d::ThreadblockShape::kM << "x"  
         << Conv2d::ThreadblockShape::kN << "x"  
@@ -573,7 +573,7 @@ bool TestSpecificConv2d(
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 // TestAllConv: Runs cutlass::conv::device::ImplicitGemmConvolution operator and compares it with reference
 // TestAllConv runs conv operator on default conv problem sizes from test::conv::device::TestbedConv2dProblemSizes
-// Additionaly, each conv2d test can provide conv problem sizes (conv_test_sizes) and blacklist of sizes 
+// Additionally, each conv2d test can provide conv problem sizes (conv_test_sizes) and blacklist of sizes 
 // (conv_blacklist_sizes)
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 template <typename ImplicitGemm>
@@ -635,9 +635,9 @@ bool TestAllConv2d(
     //
   
     // CUTLASS DGRAD's *unity* stride specialization only support stride {1, 1} 
-    if ((ImplicitGemm::kConvolutionalOperator == 
-          cutlass::conv::Operator::kDgrad) && 
-        (ImplicitGemm::ImplicitGemmKernel::Mma::IteratorA::kStrideSupport == 
+    if ((ImplicitGemm::kConvolutionalOperator == cutlass::conv::Operator::kDgrad ||
+          ImplicitGemm::kConvolutionalOperator == cutlass::conv::Operator::kDeconv) &&
+        (ImplicitGemm::UnderlyingKernel::Mma::IteratorA::kStrideSupport == 
           cutlass::conv::StrideSupport::kUnity)) {
       if (!((conv_problem.stride_h == 1) && (conv_problem.stride_w == 1))) {
         continue;
@@ -645,17 +645,17 @@ bool TestAllConv2d(
     }
 
     // Fixed channels algorithm requires channel count to match access size
-    if (ImplicitGemm::ImplicitGemmKernel::Mma::IteratorA::kIteratorAlgorithm ==
+    if (ImplicitGemm::UnderlyingKernel::Mma::IteratorA::kIteratorAlgorithm ==
         cutlass::conv::IteratorAlgorithm::kFixedChannels) {
-      if (conv_problem.C != ImplicitGemm::ImplicitGemmKernel::Mma::IteratorA::AccessType::kElements) {
+      if (conv_problem.C != ImplicitGemm::UnderlyingKernel::Mma::IteratorA::AccessType::kElements) {
         continue;
       }
     }
 
     // Few channels algorithm requires channel count to match access size
-    if (ImplicitGemm::ImplicitGemmKernel::Mma::IteratorA::kIteratorAlgorithm ==
+    if (ImplicitGemm::UnderlyingKernel::Mma::IteratorA::kIteratorAlgorithm ==
         cutlass::conv::IteratorAlgorithm::kFewChannels) {
-      if (conv_problem.C % ImplicitGemm::ImplicitGemmKernel::Mma::IteratorA::AccessType::kElements) {
+      if (conv_problem.C % ImplicitGemm::UnderlyingKernel::Mma::IteratorA::AccessType::kElements) {
         continue;
       }
     }
@@ -663,9 +663,9 @@ bool TestAllConv2d(
     // CUTLASS DGRAD's *strided* stride specialization supports all stride {stride_h, stride_w} 
     // Although strided dgrad works for all stride combinations, we are only going 
     // to run strided dgrad for non-unity strides 
-    if ((ImplicitGemm::kConvolutionalOperator == 
-          cutlass::conv::Operator::kDgrad) && 
-        (ImplicitGemm::ImplicitGemmKernel::Mma::IteratorA::kStrideSupport == 
+    if ((ImplicitGemm::kConvolutionalOperator == cutlass::conv::Operator::kDgrad ||
+          ImplicitGemm::kConvolutionalOperator == cutlass::conv::Operator::kDeconv) &&
+        (ImplicitGemm::UnderlyingKernel::Mma::IteratorA::kStrideSupport == 
           cutlass::conv::StrideSupport::kStrided)) {
        if (((conv_problem.stride_h == 1) && (conv_problem.stride_w == 1))) {
          continue;
@@ -696,7 +696,7 @@ bool TestAllConv2d(
       return false;
     }
 
-    // If CUTLASS_UNIT_TEST_PROBLEM_COUNT is set reduce the the number of tested problem counts
+    // If CUTLASS_UNIT_TEST_PROBLEM_COUNT is set reduce the number of tested problem counts
     if (CutlassUnitTestProblemCount() && 
         testbed.tested_problem_count > CutlassUnitTestProblemCount()) {
       return true;
@@ -704,23 +704,23 @@ bool TestAllConv2d(
   }
 
   // Small-channels convolution can't run here.
-  if (ImplicitGemm::ImplicitGemmKernel::Mma::IteratorA::kIteratorAlgorithm ==
+  if (ImplicitGemm::UnderlyingKernel::Mma::IteratorA::kIteratorAlgorithm ==
         cutlass::conv::IteratorAlgorithm::kFixedChannels) {
 
     return true;
   }
 
   // Small-channels convolution can't run here.
-  if (ImplicitGemm::ImplicitGemmKernel::Mma::IteratorA::kIteratorAlgorithm ==
+  if (ImplicitGemm::UnderlyingKernel::Mma::IteratorA::kIteratorAlgorithm ==
         cutlass::conv::IteratorAlgorithm::kFewChannels) {
 
     return true;
   }
 
   // CUTLASS DGRAD's *strided* specialization does not support split-k mode 
-  if ((ImplicitGemm::kConvolutionalOperator == 
-          cutlass::conv::Operator::kDgrad) && 
-      (ImplicitGemm::ImplicitGemmKernel::Mma::IteratorA::kStrideSupport == 
+    if ((ImplicitGemm::kConvolutionalOperator == cutlass::conv::Operator::kDgrad ||
+          ImplicitGemm::kConvolutionalOperator == cutlass::conv::Operator::kDeconv) &&
+      (ImplicitGemm::UnderlyingKernel::Mma::IteratorA::kStrideSupport == 
         cutlass::conv::StrideSupport::kStrided)) {
 
     passed = testbed.run(
@@ -742,7 +742,7 @@ bool TestAllConv2d(
   }
   // Sweep split-k-slice using serial and prallel reduction with non-unity alpha and non-zero beta for 
   // a single conv2d problem size. Convolution unit tests take a long time to run so only sweep parameters 
-  // which are abolutely neccessary to catch functional bugs. The below code does provide option to sweep 
+  // which are abolutely necessary to catch functional bugs. The below code does provide option to sweep
   // alpha and beta for local testing, but only runs one value for alpha and beta.
   cutlass::conv::Conv2dProblemSize conv2d_split_k_test_size (
       {1, 17, 11, 288},   // input size (NHWC)
@@ -784,7 +784,7 @@ bool TestAllConv2d(
             return false;
           }
 
-          // If CUTLASS_UNIT_TEST_PROBLEM_COUNT is set reduce the the number of tested problem counts
+          // If CUTLASS_UNIT_TEST_PROBLEM_COUNT is set reduce the number of tested problem counts
           if (CutlassUnitTestProblemCount() && 
               testbed.tested_problem_count > CutlassUnitTestProblemCount()) {
             return true;

@@ -3516,3 +3516,36 @@ torch::Tensor mixgemmforward4bit(int M, int N, int K,
                             stream);
     return fp16_out;
 }
+
+#include "weightonlykernel/fpA_intB_gemm_wrapper.h"
+// void w8_a16_gemm_forward_cuda(const half* input, const  int8_t * weight,
+//                                       const  half *scale, half* output, 
+//                                       int m, int n, int k,
+//                                       cudaStream_t stream);
+torch::Tensor w8_a16_gemm_forward_torch(torch::Tensor &input,
+                                       torch::Tensor &weight,
+                                       torch::Tensor &scale)
+{
+    // TORCH_CHECK(input.dim() == 3 || input.dim() == 2, "Invalid input dim: ", input.dim());
+    const int m = input.dim() == 2 ? input.size(0) : input.size(0) * input.size(1);
+    const int k = input.size(-1);
+    const int n = weight.size(-1);
+    auto options = torch::TensorOptions().dtype(input.dtype()).device(input.device());
+    torch::Tensor output = input.dim() == 2 ? torch::empty({m, n}, options) : torch::empty({input.size(0), input.size(1), n}, options);
+    const  half *input_ptr = reinterpret_cast< half *>(input.data_ptr());
+    const int8_t *weight_ptr = reinterpret_cast<const int8_t *>(weight.data_ptr());
+    const  half *scale_ptr = reinterpret_cast< half *>(scale.data_ptr());
+    half *output_ptr = reinterpret_cast< half *>(output.data_ptr());
+    // const int max_size = std::max(n, k);
+    // size_t workspace_size = getWorkspaceSize(m, max_size, max_size);
+    // void *ptr = nullptr;
+    // char *workspace_ptr = workspace_size > 0 ? (char *)cudaMalloc((void **)&ptr, workspace_size) : nullptr;
+    // const bool use_cuda_kernel = false; 
+    const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+
+    w8_a16_gemm_forward_cuda(input_ptr, weight_ptr,
+                                       scale_ptr, output_ptr, 
+                                       m, n, k,
+                                       stream);
+    return output;
+}

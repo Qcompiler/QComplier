@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -67,7 +67,7 @@ static int get_strided_dgrad_tile_m(
   // CUTLASS strided dgrad performance for stride > filter, i.e., stride={2x2} and filter={1x1})
   //
   // * Optimization * 
-  // Only launch CTAs in M dimenstion which contribute to a row in Dx output
+  // Only launch CTAs in M dimension which contribute to a row in Dx output
   // 
   // 
   // * Constraints *
@@ -95,11 +95,11 @@ struct StridedDgradHorizontalThreadblockSwizzle :
   /// Returns the shape of the problem in units of logical tiles
   /// For ImplicitGemmConvolution Conv2d problem size: conv_operator(NPQK, NHWC, KRSC)
   CUTLASS_HOST_DEVICE
-  gemm::GemmCoord get_tiled_shape(
+  static gemm::GemmCoord get_tiled_shape(
     cutlass::conv::Operator conv_operator,
     cutlass::conv::Conv2dProblemSize const &problem_size,
     gemm::GemmCoord tile_size,
-    int split_k_slices) const {
+    int split_k_slices) {
 
     gemm::GemmCoord implicit_gemm_problem_size = 
     cutlass::conv::implicit_gemm_problem_size(conv_operator, problem_size);
@@ -107,7 +107,7 @@ struct StridedDgradHorizontalThreadblockSwizzle :
     // compute number of tiles in m dimension
     int tile_m = get_strided_dgrad_tile_m(problem_size, tile_size.m());
 
-    // compute number of tiles in n dimenstion 
+    // compute number of tiles in n dimension 
     int tile_n = (implicit_gemm_problem_size.n() + tile_size.n() - 1) / tile_size.n();
 
     return gemm::GemmCoord(
@@ -136,11 +136,11 @@ struct StridedDgradIdentityThreadblockSwizzle :
   /// Returns the shape of the problem in units of logical tiles
   /// For ImplicitGemmConvolution Conv2d problem size: conv_operator(NPQK, NHWC, KRSC)
   CUTLASS_HOST_DEVICE
-  gemm::GemmCoord get_tiled_shape(
+  static gemm::GemmCoord get_tiled_shape(
     cutlass::conv::Operator conv_operator,
     cutlass::conv::Conv2dProblemSize const &problem_size,
     gemm::GemmCoord tile_size,
-    int split_k_slices) const {
+    int split_k_slices) {
 
     gemm::GemmCoord implicit_gemm_problem_size = 
     cutlass::conv::implicit_gemm_problem_size(conv_operator, problem_size);
@@ -148,7 +148,7 @@ struct StridedDgradIdentityThreadblockSwizzle :
     // compute number of tiles in m dimension
     int tile_m = get_strided_dgrad_tile_m(problem_size, tile_size.m());
 
-    // compute number of tiles in n dimenstion 
+    // compute number of tiles in n dimension 
     int tile_n = (implicit_gemm_problem_size.n() + tile_size.n() - 1) / tile_size.n();
 
     return gemm::GemmCoord(
@@ -165,7 +165,29 @@ struct StridedDgradIdentityThreadblockSwizzle :
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
+/// Threadblock swizzling function for GEMMs
+template <int N = 1, int Output_N = 1, int Output_P = 1, int Output_Q = 1>
+struct DepthwiseDirect2dConvIdentityThreadblockSwizzle
+    : public gemm::threadblock::GemmIdentityThreadblockSwizzle<N> {
+  CUTLASS_HOST_DEVICE
+  DepthwiseDirect2dConvIdentityThreadblockSwizzle() {}
+
+  /// Returns the shape of the problem in units of logical tiles
+  CUTLASS_HOST_DEVICE
+  static gemm::GemmCoord get_tiled_shape(cutlass::conv::Operator conv_operator,
+                            cutlass::conv::Conv2dProblemSize const &problem_size,
+                            gemm::GemmCoord tile_size,
+                            int split_k_slices) {
+        
+    gemm::GemmCoord implicit_gemm_problem_size =
+        cutlass::conv::implicit_gemm_problem_size(conv_operator, problem_size);
+
+    return gemm::GemmCoord(1,
+                     (implicit_gemm_problem_size.n() + tile_size.n() - 1) / tile_size.n(),
+                     split_k_slices);
+  }
+};
 
 } // namespace threadblock
-} // namespace gemm
+} // namespace conv
 } // namespace cutlass

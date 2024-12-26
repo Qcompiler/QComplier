@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,6 +36,8 @@
 
 #include "cutlass/array.h"
 #include "cutlass/layout/matrix.h"
+#include "cute/arch/copy_sm75.hpp"
+#include "cute/arch/util.hpp"
 
 namespace cutlass {
 namespace arch {
@@ -56,83 +58,11 @@ inline __device__ void ldsm(Array<unsigned, MatrixCount> & D, void const* ptr);
 //
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if (__CUDACC_VER_MAJOR__ == 10 && __CUDACC_VER_MINOR__ >= 2) || (__CUDACC_VER_MAJOR__ >= 11)
-
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 750)
-#define CUDA_LDMATRIX_ACTIVATED 1
-#endif
-
-#define CUDA_LDMATRIX_SUPPORTED 1
-#endif
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-/*
-#if ! defined(CUDA_NVVM_GET_SMEM_POINTER_SUPPORTED) && (__CUDACC_VER_MAJOR__ > 10)
-  #define CUDA_NVVM_GET_SMEM_POINTER_SUPPORTED 1
-#endif
-#if ! defined(CUDA_NVVM_GET_SMEM_POINTER_SUPPORTED)
-  #define CUDA_NVVM_GET_SMEM_POINTER_SUPPORTED ((__CUDACC_VER_MAJOR__ == 10) && (__CUDACC_VER_MINOR__ >= 1))
-#endif
-
-#if ! defined(CUDA_NVVM_GET_SMEM_POINTER_ENABLED)
-  #define CUDA_NVVM_GET_SMEM_POINTER_ENABLED CUDA_NVVM_GET_SMEM_POINTER_SUPPORTED
-#endif
-*/
-
-#if (! defined (__clang__) && __CUDACC_VER_MAJOR__ == 10 && __CUDACC_VER_MINOR__ >= 2)
-  extern "C" {
-  //
-  // This NVVM intrinsic is subject to change in future versions of CUDA.
-  // Clients should not call it directly. Rather, they should use the 
-  // cutlass::arch::ldsm<>() template.
-  //
-  __device__ uint32_t __nvvm_get_smem_pointer(void *);
-  }
-#endif
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-
 /// CUTLASS helper to get SMEM pointer
 inline __device__ unsigned cutlass_get_smem_pointer(void *ptr) {
-
-// We prefer to use the new CVTA intrinsics if they are available, otherwise we will fall back to
-// the previous internal intrinsics if they are available.
-#if (! defined (__clang__) && defined(__CUDA_ARCH__) && __CUDACC_VER_MAJOR__ >= 11)
-  //
-  // This NVVM intrinsic converts an address in shared memory to a plain
-  // unsigned integer. This is necessary to pass to shared memory instructions
-  // in inline PTX.
-  //
-  // In CUDA 11 and beyond, this replaces __nvvm_get_smem_pointer()  [only available in 10.2].
-  //
-  //__device__ size_t __cvta_generic_to_shared(void* ptr);
-
-  /// CUTLASS helper to get SMEM pointer
-  return static_cast<unsigned>(__cvta_generic_to_shared(ptr));
-
-#elif (! defined (__clang__) && defined(__CUDA_ARCH__) &&  __CUDACC_VER_MAJOR__ == 10 && __CUDACC_VER_MINOR__ >= 2)
-
-  return __nvvm_get_smem_pointer(ptr);
-
-#elif defined(__CUDA_ARCH__)
-
-  uint32_t smem_ptr;
-
-  asm(
-  "{ .reg .u64 smem_ptr; cvta.to.shared.u64 smem_ptr, %1; cvt.u32.u64 %0, smem_ptr; }\n" 
-    : "=r"(smem_ptr) : "l"(ptr));
-
-  return smem_ptr;
-
-#else
-
-    CUTLASS_UNUSED(ptr);
-    CUTLASS_NOT_IMPLEMENTED();
-    return 0;
-
-#endif
+  return cute::cast_smem_ptr_to_uint(ptr);
 }
-  
+
 /// CUTLASS helper to get SMEM pointer
 inline __device__ unsigned cutlass_get_smem_pointer(void const *ptr) {
   return cutlass_get_smem_pointer(const_cast<void *>(ptr));
@@ -145,7 +75,7 @@ inline __device__ void ldsm<layout::RowMajor, 1>(
     Array<unsigned, 1> & D,
     void const* ptr) {
 
-  #if defined(CUDA_LDMATRIX_ACTIVATED)
+  #if defined(CUTE_ARCH_LDSM_SM75_ACTIVATED)
 
     unsigned addr = cutlass_get_smem_pointer(ptr);
 
@@ -169,7 +99,7 @@ inline __device__ void ldsm<layout::RowMajor, 2>(
     Array<unsigned, 2> & D,
     void const* ptr) {
 
-  #if defined(CUDA_LDMATRIX_ACTIVATED)
+  #if defined(CUTE_ARCH_LDSM_SM75_ACTIVATED)
 
     unsigned addr = cutlass_get_smem_pointer(ptr);
 
@@ -193,7 +123,7 @@ inline __device__ void ldsm<layout::RowMajor, 4>(
     Array<unsigned, 4> & D,
     void const* ptr) {
 
-  #if defined(CUDA_LDMATRIX_ACTIVATED)
+  #if defined(CUTE_ARCH_LDSM_SM75_ACTIVATED)
 
     unsigned addr = cutlass_get_smem_pointer(ptr);
 
@@ -221,7 +151,7 @@ inline __device__ void ldsm<layout::ColumnMajor, 1>(
     Array<unsigned, 1> & D,
     void const* ptr) {
 
-  #if CUDA_LDMATRIX_ACTIVATED
+  #if defined(CUTE_ARCH_LDSM_SM75_ACTIVATED)
 
     unsigned addr = cutlass_get_smem_pointer(ptr);
 
@@ -245,7 +175,7 @@ inline __device__ void ldsm<layout::ColumnMajor, 2>(
     Array<unsigned, 2> & D,
     void const* ptr) {
 
-  #if defined(CUDA_LDMATRIX_ACTIVATED)
+  #if defined(CUTE_ARCH_LDSM_SM75_ACTIVATED)
 
     unsigned addr = cutlass_get_smem_pointer(ptr);
 
@@ -269,7 +199,7 @@ inline __device__ void ldsm<layout::ColumnMajor, 4>(
     Array<unsigned, 4> & D,
     void const* ptr) {
 
-  #if defined(CUDA_LDMATRIX_ACTIVATED)
+  #if defined(CUTE_ARCH_LDSM_SM75_ACTIVATED)
 
     unsigned addr = cutlass_get_smem_pointer(ptr);
 

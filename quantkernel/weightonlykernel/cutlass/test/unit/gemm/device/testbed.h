@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -50,9 +50,11 @@
 #include "cutlass/util/reference/host/gemm.h"
 
 #include "testbed_utils.h"
+#include "testbed_universal.h"
 
 #include "cutlass/layout/matrix.h"
 #include "cutlass/matrix_coord.h"
+#include "cutlass/gemm/device/gemm_universal_adapter.h"
 
 namespace test {
 namespace gemm {
@@ -63,6 +65,9 @@ namespace device {
 template <typename Gemm, bool Relu = false>
 struct Testbed {
 
+  using ElementA = typename Gemm::ElementA;
+  using ElementB = typename Gemm::ElementB;
+  using ElementC = typename Gemm::ElementC;
   using ElementAccumulator = typename Gemm::ElementAccumulator;
   using ElementCompute = typename Gemm::GemmKernel::Epilogue::OutputOp::ElementCompute;
 
@@ -127,8 +132,8 @@ struct Testbed {
         scope_max = 2;
         scope_min = 0;
       } else if (bits_input <= 8) {
-        scope_max = 2;
-        scope_min = -2;
+        scope_max = 1;
+        scope_min = -1;
       } else if (bits_output == 16) {
         scope_max = 5;
         scope_min = -5;
@@ -154,7 +159,6 @@ struct Testbed {
         view.data(), view.capacity());
     } 
     else {
-      // TODO: Implement the rest
       EXPECT_TRUE(false) << "Not implemented";
       return false;
     }
@@ -293,7 +297,7 @@ struct Testbed {
     // Determine SMEM requirements and waive if not satisfied
     //
 
-    int smem_size = int(sizeof(typename Gemm::GemmKernel::SharedStorage));
+    size_t smem_size = sizeof(typename Gemm::GemmKernel::SharedStorage);
 
     cudaDeviceProp properties;
     int device_idx;
@@ -309,7 +313,7 @@ struct Testbed {
       throw std::runtime_error("cudaGetDeviceProperties() failed");
     }
 
-    if (properties.sharedMemPerMultiprocessor < smem_size) {
+    if (properties.sharedMemPerBlockOptin < smem_size) {
       return false;
     }
 
@@ -319,10 +323,19 @@ struct Testbed {
 
   /// Executes one test
   bool run(
-    cutlass::gemm::GemmCoord problem_size, 
+    cutlass::gemm::GemmCoord problem_size,
     int split_k_slices = 1,
-    ElementCompute alpha = ElementCompute(1), 
-    ElementCompute beta = ElementCompute(0)) {
+    ElementCompute alpha = ElementCompute(1),
+    ElementCompute beta = ElementCompute(0))
+  {
+/*
+    std::cout << "\n-----------------------\n";
+    std::cout << "problem size: " << problem_size << "\n";
+    std::cout << "split_k_slices: " << split_k_slices << "\n";
+    std::cout << "alpha: " << alpha << "\n";
+    std::cout << "beta: " << beta << "\n";
+    std::cout << "-----------------------\n\n";
+*/
 
     // Waive test if insufficient CUDA device
     if (!sufficient()) {
@@ -387,7 +400,7 @@ struct Testbed {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 template <typename Gemm, bool Relu=false>
-bool TestAllGemm(
+bool TestAllGemmBasic(
     const typename Gemm::LayoutA::Stride& stride_factor_A = typename Gemm::LayoutA::Stride(),
     const typename Gemm::LayoutB::Stride& stride_factor_B = typename Gemm::LayoutB::Stride(),
     const typename Gemm::LayoutC::Stride& stride_factor_C = typename Gemm::LayoutC::Stride()) {
@@ -475,6 +488,52 @@ bool TestAllGemm(
   }
 
   return passed;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+
+template <typename Gemm, bool Relu=false>
+bool TestAllGemm(
+    const typename Gemm::LayoutA::Stride& stride_factor_A,
+    const typename Gemm::LayoutB::Stride& stride_factor_B = typename Gemm::LayoutB::Stride(),
+    const typename Gemm::LayoutC::Stride& stride_factor_C = typename Gemm::LayoutC::Stride())
+{
+  // Test basic GEMM with non-default stride factors
+  return TestAllGemmBasic<Gemm, Relu>(stride_factor_A, stride_factor_B, stride_factor_C);
+}
+
+template <typename Gemm, bool Relu=false>
+bool TestAllGemm()
+{
+#ifdef NDEBUG
+  // Non-debug builds also test basic GEMM with default stride factors
+  if (!TestAllGemmBasic<Gemm, Relu>()) {
+    return false;
+  }
+#endif // NDEBUG
+
+  // Test universal GEMM
+#if 0
+  // Define the universal kernel
+  using UniversalKernel = cutlass::gemm::kernel::GemmUniversal<
+    typename Gemm::GemmKernel::Mma,                                 // Mma
+    typename Gemm::GemmKernel::Epilogue,                            // Epilogue
+    cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>    // ThreadblockSwizzle
+  >;
+#else
+  // Define the streamk universal kernel
+  using UniversalKernel = cutlass::gemm::kernel::GemmUniversalStreamk<
+    typename Gemm::GemmKernel::Mma,                                 // Mma
+    typename Gemm::GemmKernel::Epilogue,                            // Epilogue
+    cutlass::gemm::threadblock::ThreadblockSwizzleStreamK           // ThreadblockSwizzle
+  >;
+#endif
+
+  // Define the universal adaptor
+  using UniversalGemm = cutlass::gemm::device::GemmUniversalAdapter<UniversalKernel>;
+
+  // Test universal GEMM
+  return TestAllGemmUniversal<UniversalGemm, Relu>();
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////

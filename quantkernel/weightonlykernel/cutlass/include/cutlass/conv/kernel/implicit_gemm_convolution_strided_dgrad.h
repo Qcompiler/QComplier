@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -158,21 +158,20 @@ struct ImplicitGemmConvolutionStridedDgrad {
     // Data members
     //
 
-    ConvProblemSize problem_size;
-    TensorRefA ref_A;
-    TensorRefB ref_B;
-    TensorRefC ref_C;
-    TensorRefC ref_D;
-    typename EpilogueOutputOp::Params output_op;
-    SplitKMode split_k_mode;
+    ConvProblemSize problem_size{};
+    TensorRefA ref_A{};
+    TensorRefB ref_B{};
+    TensorRefC ref_C{};
+    TensorRefC ref_D{};
+    typename EpilogueOutputOp::Params output_op{};
+    SplitKMode split_k_mode{};
 
     //
     // Methods
     //
 
     /// Default ctor
-    CUTLASS_HOST_DEVICE
-    Arguments() { }
+    Arguments() = default;
    
     CUTLASS_HOST_DEVICE 
     Arguments(
@@ -205,29 +204,28 @@ struct ImplicitGemmConvolutionStridedDgrad {
 
   /// Parameters structure
   struct Params {
-    ConvProblemSize problem_size;
-    cutlass::gemm::GemmCoord grid_tiled_shape;
-    FastDivmod stride_h_divmod;
-    FastDivmod stride_w_divmod;
-    int gemm_k_iterations;
-    typename Mma::IteratorA::Params iterator_A;
-    typename Mma::IteratorA::Element const *ptr_A;
-    typename Mma::IteratorB::Params iterator_B;
-    typename Mma::IteratorB::Element const *ptr_B;
-    typename Epilogue::OutputTileIterator::Params iterator_C;
-    typename Epilogue::OutputTileIterator::Element *ptr_C;
-    typename Epilogue::OutputTileIterator::Params iterator_D;
-    typename Epilogue::OutputTileIterator::Element *ptr_D;
-    typename EpilogueOutputOp::Params output_op;
-    int *semaphore;
-    SplitKMode split_k_mode;
+    ConvProblemSize problem_size{};
+    cutlass::gemm::GemmCoord grid_tiled_shape{};
+    int swizzle_log_tile{0};
+    FastDivmod stride_h_divmod{};
+    FastDivmod stride_w_divmod{};
+    int gemm_k_iterations{0};
+    typename Mma::IteratorA::Params iterator_A{};
+    typename Mma::IteratorA::Element const *ptr_A = nullptr;
+    typename Mma::IteratorB::Params iterator_B{};
+    typename Mma::IteratorB::Element const *ptr_B = nullptr;
+    typename Epilogue::OutputTileIterator::Params iterator_C{};
+    typename Epilogue::OutputTileIterator::Element *ptr_C = nullptr;
+    typename Epilogue::OutputTileIterator::Params iterator_D{};
+    typename Epilogue::OutputTileIterator::Element *ptr_D = nullptr;
+    typename EpilogueOutputOp::Params output_op {};
+    int *semaphore = nullptr;
+    SplitKMode split_k_mode {};
 
     //
     // Methods
     //
-
-    CUTLASS_HOST_DEVICE
-    Params(): gemm_k_iterations(0) { }
+    Params() = default;
 
     /// 
     CUTLASS_HOST_DEVICE
@@ -259,6 +257,8 @@ struct ImplicitGemmConvolutionStridedDgrad {
         args.problem_size,
         {ThreadblockShape::kM, ThreadblockShape::kN, ThreadblockShape::kK},
         args.problem_size.split_k_slices);
+      
+      swizzle_log_tile = threadblock_swizzle.get_log_tile(grid_tiled_shape);
     }
   };
 
@@ -283,7 +283,7 @@ struct ImplicitGemmConvolutionStridedDgrad {
     ThreadblockSwizzle threadblock_swizzle;
 
     cutlass::gemm::GemmCoord threadblock_tile_idx =
-        threadblock_swizzle.get_tile_offset(params.grid_tiled_shape);
+        threadblock_swizzle.get_tile_offset(params.swizzle_log_tile);
 
     // Early exit if CTA is out of range
     if (params.grid_tiled_shape.m() <= threadblock_tile_idx.m() ||
@@ -335,7 +335,7 @@ struct ImplicitGemmConvolutionStridedDgrad {
 
     // Broadcast the warp_id computed by lane 0 to ensure dependent code
     // is compiled as warp-uniform.
-    int warp_idx = __shfl_sync(0xffffffff, threadIdx.x / 32, 0);
+    int warp_idx = canonical_warp_idx_sync();
     int lane_idx = threadIdx.x % 32;
 
     // Check if CTA contributes valid MMA (Dy * w) and accumulator will be non-zero after MMA
@@ -389,16 +389,15 @@ struct ImplicitGemmConvolutionStridedDgrad {
 
     // Construct the semaphore.
     int block_idx = threadblock_tile_idx.m() + threadblock_tile_idx.n() * params.grid_tiled_shape.m();
-
     Semaphore semaphore(params.semaphore + block_idx, thread_idx);
-    
+
     // Compute logical position within grid
     threadblock_tile_idx =
-        threadblock_swizzle.get_tile_offset(params.grid_tiled_shape);
+        threadblock_swizzle.get_tile_offset(params.swizzle_log_tile);
 
     // If performing a reduction via split-K, fetch the initial synchronization
     if (params.split_k_mode == SplitKMode::kSerial && params.grid_tiled_shape.k() > 1) {
-        
+
       // Fetch the synchronization lock initially but do not block.
       semaphore.fetch();
 
@@ -421,51 +420,51 @@ struct ImplicitGemmConvolutionStridedDgrad {
       start_r, start_s,
       threadblock_offset
     );
-    
-    // Tile iterator reading from source accumulator tensor
-    typename Epilogue::OutputTileIterator iterator_C(
-      params.iterator_C,
-      params.ptr_C,
-      ConvOutputIteratorParameter::extent(params.problem_size),
-      thread_idx,
-      params.stride_h_divmod, params.stride_w_divmod,
-      start_r, start_s,
-      threadblock_offset
-    );
-
 
     // Construct the epilogue
     Epilogue epilogue(
-      shared_storage.epilogue, 
-      thread_idx, 
-      warp_idx, 
+      shared_storage.epilogue,
+      thread_idx,
+      warp_idx,
       lane_idx);
 
-    // Wait on the semaphore - this latency may have been covered by iterator construction
-    if (params.split_k_mode == SplitKMode::kSerial && params.grid_tiled_shape.k() > 1) {
-        
-      // For subsequent threadblocks, the source matrix is held in the 'D' tensor.
-      if (threadblock_tile_idx.k()) {
-        iterator_C = iterator_D;
+    if (output_op.is_source_needed())
+    {
+      // Tile iterator reading from source accumulator tensor
+      typename Epilogue::OutputTileIterator iterator_C(
+        params.iterator_C,
+        params.ptr_C,
+        ConvOutputIteratorParameter::extent(params.problem_size),
+        thread_idx,
+        params.stride_h_divmod, params.stride_w_divmod,
+        start_r, start_s,
+        threadblock_offset);
+
+      // Wait on the semaphore - this latency may have been covered by iterator construction
+      if (params.split_k_mode == SplitKMode::kSerial && params.grid_tiled_shape.k() > 1) {
+
+        // For subsequent threadblocks, the source matrix is held in the 'D' tensor.
+        if (threadblock_tile_idx.k()) {
+          iterator_C = iterator_D;
+        }
+
+        semaphore.wait(threadblock_tile_idx.k());
       }
 
-      semaphore.wait(threadblock_tile_idx.k());
-
+      // Run epilogue with addend source iterator
+      epilogue(output_op, iterator_D, accumulators, iterator_C);
     }
-    // Each split-k-slice writes to a unique tensor location
-    else if (params.split_k_mode == SplitKMode::kParallel) {
-      iterator_D.add_pointer_offset(threadblock_tile_idx.k() * 
-        cutlass::conv::implicit_gemm_tensor_c_size(ConvOperator, params.problem_size));
+    else
+    {
+      // Run epilogue without addend source iterator
+      epilogue(output_op, iterator_D, accumulators);
     }
 
-    // Run efficient epilogue
-    epilogue(output_op, iterator_D, accumulators, iterator_C);
-  
     //
     // Release the semaphore
     //
 
-    if (params.split_k_mode == SplitKMode::kSerial && params.grid_tiled_shape.k() > 1) { 
+    if (params.split_k_mode == SplitKMode::kSerial && params.grid_tiled_shape.k() > 1) {
 
       int lock = 0;
       if (params.grid_tiled_shape.k() == threadblock_tile_idx.k() + 1) {
@@ -477,10 +476,11 @@ struct ImplicitGemmConvolutionStridedDgrad {
         // Otherwise, the semaphore is incremented
         lock = threadblock_tile_idx.k() + 1;
       }
-      
+
       semaphore.release(lock);
     }
-  } 
+
+  }
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////

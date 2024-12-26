@@ -84,8 +84,8 @@ check_dependencies()
 include_dirs = get_include_dirs()
 generator_flags = get_generator_flag()
 arch_flags = get_compute_capabilities()
-# library_dirs_ = ['/home/chenyidong/quant/cutlass_fpA_intB_gemm/cutlass_kernels',]
-# libraries_ = ['fpA_intB_gemm',]
+library_dirs_ = ['/home/chenyidong/QComplier/quantkernel/weightonlykernel/build',]
+libraries_ = ['weightonlykernel',]
 
 print(include_dirs)
 if os.name == "nt":
@@ -98,7 +98,8 @@ if os.name == "nt":
         extra_compile_args={}
 else:
     extra_compile_args={
-        "cxx": ["-g", "-O3", "-fopenmp", "-lgomp", "-std=c++17", "-DENABLE_BF16", "-DTHRUST_DEVICE_SYSTEM=THRUST_DEVICE_SYSTEM_CPP"],
+        "cxx": ["-g", "-O3", "-fopenmp", "-lgomp", "-std=c++17", "-DENABLE_BF16", 
+                "-DTHRUST_DEVICE_SYSTEM=THRUST_DEVICE_SYSTEM_CPP"],
         "nvcc": [
             "-O3", 
             "-std=c++17",
@@ -126,8 +127,8 @@ extensions = [
             "mix_cuda/layernorm/layernorm.cu",
             #"mix_cuda/cutlassmix.cu",
         ], 
-        # library_dirs =library_dirs_,
-        # libraries=libraries_,
+        library_dirs =library_dirs_,
+        libraries=libraries_,
         
         
         extra_compile_args=extra_compile_args

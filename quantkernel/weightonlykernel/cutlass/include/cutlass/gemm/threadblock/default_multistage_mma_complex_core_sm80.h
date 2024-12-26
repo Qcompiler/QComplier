@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -600,7 +600,7 @@ struct DefaultMultistageMmaComplexCore<
 ///   A: column-major
 ///   B: column-major
 ///   Operator: arch::OpMultiplyAddComplex
-///   Math Instruction: MMA.1688.F32.TF32
+///   Math Instruction: mma.sync.aligned.m16n8k8.f32.tf32.tf32.f32
 ///
 /// This uses the default warp-level operator given tile sizes
 template <
@@ -730,7 +730,7 @@ struct DefaultMultistageMmaComplexCore<
 ///   A: column-major
 ///   B: row-major
 ///   Operator: arch::OpMultiplyAddComplex
-///   Math Instruction: MMA.1688.F32.TF32
+///   Math Instruction: mma.sync.aligned.m16n8k8.f32.tf32.tf32.f32
 ///
 /// This uses the default warp-level operator given tile sizes
 template <
@@ -861,7 +861,7 @@ struct DefaultMultistageMmaComplexCore<
 ///   A: row-major
 ///   B: column-major
 ///   Operator: arch::OpMultiplyAddComplex
-///   Math Instruction: MMA.1688.F32.TF32
+///   Math Instruction: mma.sync.aligned.m16n8k8.f32.tf32.tf32.f32
 ///
 /// This uses the default warp-level operator given tile sizes
 template <
@@ -992,7 +992,7 @@ struct DefaultMultistageMmaComplexCore<
 ///   A: row-major
 ///   B: row-major
 ///   Operator: arch::OpMultiplyAddComplex
-///   Math Instruction: MMA.1688.F32.TF32
+///   Math Instruction: mma.sync.aligned.m16n8k8.f32.tf32.tf32.f32
 ///
 /// This uses the default warp-level operator given tile sizes
 template <
@@ -1118,10 +1118,10 @@ struct DefaultMultistageMmaComplexCore<
 
 ////////////////////////////////////////////////////////////////////////////////
 
-/// Partial specialization for complex double-precision
+/// Partial specialization for complex SIMT operation
 ///
 ///   A: column-major
-///   B: row-major
+///   B: column-major
 ///   Operator: arch::OpMultiplyAddComplex or arch::OpMultiplyGaussianComplex
 ///
 /// This uses the default warp-level operator given tile sizes
@@ -1244,7 +1244,7 @@ struct DefaultMultistageMmaComplexCore<
   //
 
   // Define the warp-level op
-  static const int WarpNumThreadsM = 4; // TODO need to extract these from template data
+  static const int WarpNumThreadsM = 4;
   static const int WarpNumThreadsN = 8;
   static_assert(!(WarpShape::kM % WarpNumThreadsM) && !(WarpShape::kN % WarpNumThreadsN),
       "WarpShape must be divisible by ThreadTile shape.");
@@ -1267,15 +1267,18 @@ struct DefaultMultistageMmaComplexCore<
   >;
 
   using MmaWarpSimt = cutlass::gemm::warp::MmaSimt<
-    WarpShape, /// Size of the Gemm problem - concept: gemm::GemmShape<> 128, 128, 8
-    ElementA,  /// Data type of A elements
-    SmemLayoutA,   /// Layout of A matrix (concept: MatrixLayout)
-    ElementB,  /// Data type of B elements
-    SmemLayoutB,   /// Layout of B matrix (concept: MatrixLayout)
-    ElementC,  /// Element type of C matrix
-    LayoutC,   /// Layout of C matrix (concept: MatrixLayout)
-    Policy     /// Policy describing warp-level MmaTensorOp (concept: MmaTensorOp policy)
-    >;         /// Used for partial specialization
+    WarpShape,    /// Size of the Gemm problem - concept: gemm::GemmShape<> 128, 128, 8
+    ElementA,     /// Data type of A elements
+    SmemLayoutA,  /// Layout of A matrix (concept: MatrixLayout)
+    ElementB,     /// Data type of B elements
+    SmemLayoutB,  /// Layout of B matrix (concept: MatrixLayout)
+    ElementC,     /// Element type of C matrix
+    LayoutC,      /// Layout of C matrix (concept: MatrixLayout)
+    Policy,       /// Policy describing warp-level MmaTensorOp (concept: MmaTensorOp policy)
+    1,            /// 1 partition along K dimension
+    kTransformA,  /// Transform for A
+    kTransformB   /// Transform for B
+    >;            /// Used for partial specialization
 
   /// Policy used to define MmaPipelined
   using MmaPolicy = MmaPolicy<
@@ -1285,7 +1288,7 @@ struct DefaultMultistageMmaComplexCore<
     WarpCount::kK>;
 };
 
-/// Partial specialization for complex double-precision
+/// Partial specialization for complex SIMT operation
 ///
 ///   A: column-major
 ///   B: row-major
@@ -1408,7 +1411,7 @@ struct DefaultMultistageMmaComplexCore<
   //
 
   // Define the warp-level op
-  static const int WarpNumThreadsM = 4; // TODO need to extract these from template data
+  static const int WarpNumThreadsM = 4;
   static const int WarpNumThreadsN = 8;
   static_assert(!(WarpShape::kM % WarpNumThreadsM) && !(WarpShape::kN % WarpNumThreadsN),
       "WarpShape must be divisible by ThreadTile shape.");
@@ -1431,15 +1434,18 @@ struct DefaultMultistageMmaComplexCore<
   >;
 
   using MmaWarpSimt = cutlass::gemm::warp::MmaSimt<
-    WarpShape, /// Size of the Gemm problem - concept: gemm::GemmShape<> 128, 128, 8
-    ElementA,  /// Data type of A elements
-    SmemLayoutA,   /// Layout of A matrix (concept: MatrixLayout)
-    ElementB,  /// Data type of B elements
-    SmemLayoutB,   /// Layout of B matrix (concept: MatrixLayout)
-    ElementC,  /// Element type of C matrix
-    LayoutC,   /// Layout of C matrix (concept: MatrixLayout)
-    Policy     /// Policy describing warp-level MmaTensorOp (concept: MmaTensorOp policy)
-    >;         /// Used for partial specialization
+    WarpShape,    /// Size of the Gemm problem - concept: gemm::GemmShape<> 128, 128, 8
+    ElementA,     /// Data type of A elements
+    SmemLayoutA,  /// Layout of A matrix (concept: MatrixLayout)
+    ElementB,     /// Data type of B elements
+    SmemLayoutB,  /// Layout of B matrix (concept: MatrixLayout)
+    ElementC,     /// Element type of C matrix
+    LayoutC,      /// Layout of C matrix (concept: MatrixLayout)
+    Policy,       /// Policy describing warp-level MmaTensorOp (concept: MmaTensorOp policy)
+    1,            /// 1 partition along K dimension
+    kTransformA,  /// Transform for A
+    kTransformB   /// Transform for B
+    >;            /// Used for partial specialization
 
   /// Policy used to define MmaPipelined
   using MmaPolicy = MmaPolicy<
@@ -1449,10 +1455,10 @@ struct DefaultMultistageMmaComplexCore<
     WarpCount::kK>;
 };
 
-/// Partial specialization for complex double-precision
+/// Partial specialization for complex SIMT operation
 ///
-///   A: column-major
-///   B: row-major
+///   A: row-major
+///   B: column-major
 ///   Operator: arch::OpMultiplyAddComplex or arch::OpMultiplyGaussianComplex
 ///
 /// This uses the default warp-level operator given tile sizes
@@ -1578,7 +1584,7 @@ struct DefaultMultistageMmaComplexCore<
   //
 
   // Define the warp-level op
-  static const int WarpNumThreadsM = 4; // TODO need to extract these from template data
+  static const int WarpNumThreadsM = 4;
   static const int WarpNumThreadsN = 8;
   static_assert(!(WarpShape::kM % WarpNumThreadsM) && !(WarpShape::kN % WarpNumThreadsN),
       "WarpShape must be divisible by ThreadTile shape.");
@@ -1601,15 +1607,18 @@ struct DefaultMultistageMmaComplexCore<
   >;
 
   using MmaWarpSimt = cutlass::gemm::warp::MmaSimt<
-    WarpShape, /// Size of the Gemm problem - concept: gemm::GemmShape<> 128, 128, 8
-    ElementA,  /// Data type of A elements
-    SmemLayoutA,   /// Layout of A matrix (concept: MatrixLayout)
-    ElementB,  /// Data type of B elements
-    SmemLayoutB,   /// Layout of B matrix (concept: MatrixLayout)
-    ElementC,  /// Element type of C matrix
-    LayoutC,   /// Layout of C matrix (concept: MatrixLayout)
-    Policy     /// Policy describing warp-level MmaTensorOp (concept: MmaTensorOp policy)
-    >;         /// Used for partial specialization
+    WarpShape,    /// Size of the Gemm problem - concept: gemm::GemmShape<> 128, 128, 8
+    ElementA,     /// Data type of A elements
+    SmemLayoutA,  /// Layout of A matrix (concept: MatrixLayout)
+    ElementB,     /// Data type of B elements
+    SmemLayoutB,  /// Layout of B matrix (concept: MatrixLayout)
+    ElementC,     /// Element type of C matrix
+    LayoutC,      /// Layout of C matrix (concept: MatrixLayout)
+    Policy,       /// Policy describing warp-level MmaTensorOp (concept: MmaTensorOp policy)
+    1,            /// 1 partition along K dimension
+    kTransformA,  /// Transform for A
+    kTransformB   /// Transform for B
+    >;            /// Used for partial specialization
 
   /// Policy used to define MmaPipelined
   using MmaPolicy = MmaPolicy<
@@ -1619,9 +1628,9 @@ struct DefaultMultistageMmaComplexCore<
     WarpCount::kK>;
 };
 
-/// Partial specialization for complex double-precision
+/// Partial specialization for complex SIMT operation
 ///
-///   A: column-major
+///   A: row-major
 ///   B: row-major
 ///   Operator: arch::OpMultiplyAddComplex or arch::OpMultiplyGaussianComplex
 ///
@@ -1745,7 +1754,7 @@ struct DefaultMultistageMmaComplexCore<
   //
 
   // Define the warp-level op
-  static const int WarpNumThreadsM = 4; // TODO need to extract these from template data
+  static const int WarpNumThreadsM = 4;
   static const int WarpNumThreadsN = 8;
   static_assert(!(WarpShape::kM % WarpNumThreadsM) && !(WarpShape::kN % WarpNumThreadsN),
       "WarpShape must be divisible by ThreadTile shape.");
@@ -1768,15 +1777,18 @@ struct DefaultMultistageMmaComplexCore<
   >;
 
   using MmaWarpSimt = cutlass::gemm::warp::MmaSimt<
-    WarpShape, /// Size of the Gemm problem - concept: gemm::GemmShape<> 128, 128, 8
-    ElementA,  /// Data type of A elements
-    SmemLayoutA,   /// Layout of A matrix (concept: MatrixLayout)
-    ElementB,  /// Data type of B elements
-    SmemLayoutB,   /// Layout of B matrix (concept: MatrixLayout)
-    ElementC,  /// Element type of C matrix
-    LayoutC,   /// Layout of C matrix (concept: MatrixLayout)
-    Policy     /// Policy describing warp-level MmaTensorOp (concept: MmaTensorOp policy)
-    >;         /// Used for partial specialization
+    WarpShape,    /// Size of the Gemm problem - concept: gemm::GemmShape<> 128, 128, 8
+    ElementA,     /// Data type of A elements
+    SmemLayoutA,  /// Layout of A matrix (concept: MatrixLayout)
+    ElementB,     /// Data type of B elements
+    SmemLayoutB,  /// Layout of B matrix (concept: MatrixLayout)
+    ElementC,     /// Element type of C matrix
+    LayoutC,      /// Layout of C matrix (concept: MatrixLayout)
+    Policy,       /// Policy describing warp-level MmaTensorOp (concept: MmaTensorOp policy)
+    1,            /// 1 partition along K dimension
+    kTransformA,  /// Transform for A
+    kTransformB   /// Transform for B
+    >;            /// Used for partial specialization
 
   /// Policy used to define MmaPipelined
   using MmaPolicy = MmaPolicy<

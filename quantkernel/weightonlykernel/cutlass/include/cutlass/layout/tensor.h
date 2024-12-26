@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -59,6 +59,19 @@ namespace layout {
 // Defines data layouts of various tensor formats usable by TensorRef and other classes.
 //
 /////////////////////////////////////////////////////////////////////////////////////////////////
+
+/// Tag used for 3-D NWC tensors for 1-D convolutions; only used in 3.x API
+class TensorNWC {};
+
+/// Tag used for n-D KCSRT tensors for n-D convolutions; only used in 3.x API for wgrad output layouts
+class TensorKCS {};
+class TensorKCSR {};
+class TensorKCSRT {};
+
+/// Tag used for n-D CSRTK tensors for n-D convolutions; only used in 3.x API for wgrad output layouts
+class TensorCSK {};
+class TensorCSRK {};
+class TensorCSRTK {};
 
 /// Mapping function for 4-D NHWC tensors.
 class TensorNHWC {
@@ -628,7 +641,6 @@ public:
     return extent.n() * stride_[3];
   }
 };
-
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 

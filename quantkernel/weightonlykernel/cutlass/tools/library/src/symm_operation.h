@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -353,7 +353,7 @@ public:
     std::cout << "SymmOperation::OperatorArguments" << std::endl
               << "  problem_size:" << std::endl 
               << operator_args.problem_size << std::endl
-              << "  epilouge (alpha, beta): "
+              << "  epilogue (alpha, beta): "
               << operator_args.epilogue.alpha << ", " 
               << operator_args.epilogue.beta << std::endl
               << "  ref_A (ptr, {stride}): " 

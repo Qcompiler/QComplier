@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -49,7 +49,6 @@
 #include "testbed.h"
 
 #if defined(CUTLASS_ARCH_MMA_SM75_SUPPORTED)
-
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 CUTLASS_TEST_L0(SM75_Device_Gemm_s8t_s8n_s8t_tensor_op_s32, 128x256x64_64x64x64, {
@@ -83,6 +82,24 @@ CUTLASS_TEST_L0(SM75_Device_Gemm_s8t_s8n_s8t_tensor_op_s32, 256x128x64_64x64x64,
       cutlass::gemm::GemmShape<64, 64, 64>, cutlass::gemm::GemmShape<8, 8, 16>,
       cutlass::epilogue::thread::FastLinearCombinationClamp<
           ElementOutput, 128 / cutlass::sizeof_bits<ElementOutput>::value>,
+      cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>, 2>;
+
+  EXPECT_TRUE(test::gemm::device::TestAllGemm<Gemm>());
+} )
+
+CUTLASS_TEST_L0(SM75_Device_Gemm_s8t_s8n_s8t_tensor_op_s32_align8, 256x128x64_64x64x64, {
+  using ElementOutput = int8_t;
+  using ElementAccumulator = int32_t;
+  using ElementCompute = float;
+
+  using Gemm = cutlass::gemm::device::Gemm<
+      int8_t, cutlass::layout::RowMajor, int8_t, cutlass::layout::ColumnMajor,
+      ElementOutput, cutlass::layout::RowMajor, ElementAccumulator,
+      cutlass::arch::OpClassTensorOp, cutlass::arch::Sm75,
+      cutlass::gemm::GemmShape<256, 128, 64>,
+      cutlass::gemm::GemmShape<64, 64, 64>, cutlass::gemm::GemmShape<8, 8, 16>,
+      cutlass::epilogue::thread::FastLinearCombinationClamp<
+          ElementOutput, 8>,
       cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>, 2>;
 
   EXPECT_TRUE(test::gemm::device::TestAllGemm<Gemm>());
@@ -167,6 +184,357 @@ CUTLASS_TEST_L0(SM75_Device_Gemm_s8t_s8n_s8t_tensor_op_s32, 64x64x64_32x32x64, {
   EXPECT_TRUE(test::gemm::device::TestAllGemm<Gemm>());
 } )
 
-/////////////////////////////////////////////////////////////////////////////////////////////////
+TEST(SM75_Device_Gemm_s8t_s8n_s8t_tensor_op_s32, 32x32x64_16x16x64) {
 
+  using ElementOutput = int8_t;
+  using ElementAccumulator = int32_t;
+  using ElementCompute = float;
+
+  using Gemm = cutlass::gemm::device::Gemm<
+    int8_t,
+    cutlass::layout::RowMajor,
+    int8_t,
+    cutlass::layout::ColumnMajor,
+    ElementOutput,
+    cutlass::layout::RowMajor,
+    ElementAccumulator,
+    cutlass::arch::OpClassTensorOp,
+    cutlass::arch::Sm75,
+    cutlass::gemm::GemmShape<32, 32, 64>,
+    cutlass::gemm::GemmShape<16, 16, 64>,
+    cutlass::gemm::GemmShape<8, 8, 16>,
+    cutlass::epilogue::thread::LinearCombinationClamp<
+      ElementOutput,
+      32 / cutlass::sizeof_bits<ElementOutput>::value,
+      ElementAccumulator,
+      ElementCompute
+    >,
+    cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>,
+    2
+  >;
+
+  EXPECT_TRUE(test::gemm::device::TestAllGemm<Gemm>());
+}
+
+TEST(SM75_Device_Gemm_s8t_s8n_s8t_tensor_op_s32, 32x64x64_16x32x64) {
+
+  using ElementOutput = int8_t;
+  using ElementAccumulator = int32_t;
+  using ElementCompute = float;
+
+  using Gemm = cutlass::gemm::device::Gemm<
+    int8_t,
+    cutlass::layout::RowMajor,
+    int8_t,
+    cutlass::layout::ColumnMajor,
+    ElementOutput,
+    cutlass::layout::RowMajor,
+    ElementAccumulator,
+    cutlass::arch::OpClassTensorOp,
+    cutlass::arch::Sm75,
+    cutlass::gemm::GemmShape<32, 64, 64>,
+    cutlass::gemm::GemmShape<16, 32, 64>,
+    cutlass::gemm::GemmShape<8, 8, 16>,
+    cutlass::epilogue::thread::LinearCombinationClamp<
+      ElementOutput,
+      64 / cutlass::sizeof_bits<ElementOutput>::value,
+      ElementAccumulator,
+      ElementCompute
+    >,
+    cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>,
+    2
+  >;
+
+  EXPECT_TRUE(test::gemm::device::TestAllGemm<Gemm>());
+}
+
+TEST(SM75_Device_Gemm_s8t_s8n_s8t_tensor_op_s32, 32x128x64_16x64x64) {
+
+  using ElementOutput = int8_t;
+  using ElementAccumulator = int32_t;
+  using ElementCompute = float;
+
+  using Gemm = cutlass::gemm::device::Gemm<
+    int8_t,
+    cutlass::layout::RowMajor,
+    int8_t,
+    cutlass::layout::ColumnMajor,
+    ElementOutput,
+    cutlass::layout::RowMajor,
+    ElementAccumulator,
+    cutlass::arch::OpClassTensorOp,
+    cutlass::arch::Sm75,
+    cutlass::gemm::GemmShape<32, 128, 64>,
+    cutlass::gemm::GemmShape<16, 64, 64>,
+    cutlass::gemm::GemmShape<8, 8, 16>,
+    cutlass::epilogue::thread::LinearCombinationClamp<
+      ElementOutput,
+      128 / cutlass::sizeof_bits<ElementOutput>::value,
+      ElementAccumulator,
+      ElementCompute
+    >,
+    cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>,
+    2
+  >;
+
+  EXPECT_TRUE(test::gemm::device::TestAllGemm<Gemm>());
+}
+
+TEST(SM75_Device_Gemm_s8t_s8n_s8t_tensor_op_s32, 32x64x64_32x16x64) {
+
+  using ElementOutput = int8_t;
+  using ElementAccumulator = int32_t;
+  using ElementCompute = float;
+
+  using Gemm = cutlass::gemm::device::Gemm<
+    int8_t,
+    cutlass::layout::RowMajor,
+    int8_t,
+    cutlass::layout::ColumnMajor,
+    ElementOutput,
+    cutlass::layout::RowMajor,
+    ElementAccumulator,
+    cutlass::arch::OpClassTensorOp,
+    cutlass::arch::Sm75,
+    cutlass::gemm::GemmShape<32, 64, 64>,
+    cutlass::gemm::GemmShape<32, 16, 64>,
+    cutlass::gemm::GemmShape<8, 8, 16>,
+    cutlass::epilogue::thread::LinearCombinationClamp<
+      ElementOutput,
+      32 / cutlass::sizeof_bits<ElementOutput>::value,
+      ElementAccumulator,
+      ElementCompute
+    >,
+    cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>,
+    2
+  >;
+
+  EXPECT_TRUE(test::gemm::device::TestAllGemm<Gemm>());
+}
+
+TEST(SM75_Device_Gemm_s8t_s8n_s8t_tensor_op_s32, 32x128x64_32x32x64) {
+
+  using ElementOutput = int8_t;
+  using ElementAccumulator = int32_t;
+  using ElementCompute = float;
+
+  using Gemm = cutlass::gemm::device::Gemm<
+    int8_t,
+    cutlass::layout::RowMajor,
+    int8_t,
+    cutlass::layout::ColumnMajor,
+    ElementOutput,
+    cutlass::layout::RowMajor,
+    ElementAccumulator,
+    cutlass::arch::OpClassTensorOp,
+    cutlass::arch::Sm75,
+    cutlass::gemm::GemmShape<32, 128, 64>,
+    cutlass::gemm::GemmShape<32, 32, 64>,
+    cutlass::gemm::GemmShape<8, 8, 16>,
+    cutlass::epilogue::thread::LinearCombinationClamp<
+      ElementOutput,
+      64 / cutlass::sizeof_bits<ElementOutput>::value,
+      ElementAccumulator,
+      ElementCompute
+    >,
+    cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>,
+    2
+  >;
+
+  EXPECT_TRUE(test::gemm::device::TestAllGemm<Gemm>());
+}
+
+TEST(SM75_Device_Gemm_s8t_s8n_s8t_tensor_op_s32, 32x256x64_32x64x64) {
+
+  using ElementOutput = int8_t;
+  using ElementAccumulator = int32_t;
+  using ElementCompute = float;
+
+  using Gemm = cutlass::gemm::device::Gemm<
+    int8_t,
+    cutlass::layout::RowMajor,
+    int8_t,
+    cutlass::layout::ColumnMajor,
+    ElementOutput,
+    cutlass::layout::RowMajor,
+    ElementAccumulator,
+    cutlass::arch::OpClassTensorOp,
+    cutlass::arch::Sm75,
+    cutlass::gemm::GemmShape<32, 256, 64>,
+    cutlass::gemm::GemmShape<32, 64, 64>,
+    cutlass::gemm::GemmShape<8, 8, 16>,
+    cutlass::epilogue::thread::LinearCombinationClamp<
+      ElementOutput,
+      128 / cutlass::sizeof_bits<ElementOutput>::value,
+      ElementAccumulator,
+      ElementCompute
+    >,
+    cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>,
+    2
+  >;
+
+  EXPECT_TRUE(test::gemm::device::TestAllGemm<Gemm>());
+}
+
+TEST(SM75_Device_Gemm_s8t_s8n_s8t_tensor_op_s32, 64x32x64_32x16x64) {
+
+  using ElementOutput = int8_t;
+  using ElementAccumulator = int32_t;
+  using ElementCompute = float;
+
+  using Gemm = cutlass::gemm::device::Gemm<
+    int8_t,
+    cutlass::layout::RowMajor,
+    int8_t,
+    cutlass::layout::ColumnMajor,
+    ElementOutput,
+    cutlass::layout::RowMajor,
+    ElementAccumulator,
+    cutlass::arch::OpClassTensorOp,
+    cutlass::arch::Sm75,
+    cutlass::gemm::GemmShape<64, 32, 64>,
+    cutlass::gemm::GemmShape<32, 16, 64>,
+    cutlass::gemm::GemmShape<8, 8, 16>,
+    cutlass::epilogue::thread::LinearCombinationClamp<
+      ElementOutput,
+      32 / cutlass::sizeof_bits<ElementOutput>::value,
+      ElementAccumulator,
+      ElementCompute
+    >,
+    cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>,
+    2
+  >;
+
+  EXPECT_TRUE(test::gemm::device::TestAllGemm<Gemm>());
+}
+
+TEST(SM75_Device_Gemm_s8t_s8n_s8t_tensor_op_s32, 128x32x64_64x16x64) {
+
+  using ElementOutput = int8_t;
+  using ElementAccumulator = int32_t;
+  using ElementCompute = float;
+
+  using Gemm = cutlass::gemm::device::Gemm<
+    int8_t,
+    cutlass::layout::RowMajor,
+    int8_t,
+    cutlass::layout::ColumnMajor,
+    ElementOutput,
+    cutlass::layout::RowMajor,
+    ElementAccumulator,
+    cutlass::arch::OpClassTensorOp,
+    cutlass::arch::Sm75,
+    cutlass::gemm::GemmShape<128, 32, 64>,
+    cutlass::gemm::GemmShape<64, 16, 64>,
+    cutlass::gemm::GemmShape<8, 8, 16>,
+    cutlass::epilogue::thread::LinearCombinationClamp<
+      ElementOutput,
+      32 / cutlass::sizeof_bits<ElementOutput>::value,
+      ElementAccumulator,
+      ElementCompute
+    >,
+    cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>,
+    2
+  >;
+
+  EXPECT_TRUE(test::gemm::device::TestAllGemm<Gemm>());
+}
+
+TEST(SM75_Device_Gemm_s8t_s8n_s8t_tensor_op_s32, 64x32x64_16x32x64) {
+
+  using ElementOutput = int8_t;
+  using ElementAccumulator = int32_t;
+  using ElementCompute = float;
+
+  using Gemm = cutlass::gemm::device::Gemm<
+    int8_t,
+    cutlass::layout::RowMajor,
+    int8_t,
+    cutlass::layout::ColumnMajor,
+    ElementOutput,
+    cutlass::layout::RowMajor,
+    ElementAccumulator,
+    cutlass::arch::OpClassTensorOp,
+    cutlass::arch::Sm75,
+    cutlass::gemm::GemmShape<64, 32, 64>,
+    cutlass::gemm::GemmShape<16, 32, 64>,
+    cutlass::gemm::GemmShape<8, 8, 16>,
+    cutlass::epilogue::thread::LinearCombinationClamp<
+      ElementOutput,
+      64 / cutlass::sizeof_bits<ElementOutput>::value,
+      ElementAccumulator,
+      ElementCompute
+    >,
+    cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>,
+    2
+  >;
+
+  EXPECT_TRUE(test::gemm::device::TestAllGemm<Gemm>());
+}
+
+TEST(SM75_Device_Gemm_s8t_s8n_s8t_tensor_op_s32, 128x32x64_32x32x64) {
+
+  using ElementOutput = int8_t;
+  using ElementAccumulator = int32_t;
+  using ElementCompute = float;
+
+  using Gemm = cutlass::gemm::device::Gemm<
+    int8_t,
+    cutlass::layout::RowMajor,
+    int8_t,
+    cutlass::layout::ColumnMajor,
+    ElementOutput,
+    cutlass::layout::RowMajor,
+    ElementAccumulator,
+    cutlass::arch::OpClassTensorOp,
+    cutlass::arch::Sm75,
+    cutlass::gemm::GemmShape<128, 32, 64>,
+    cutlass::gemm::GemmShape<32, 32, 64>,
+    cutlass::gemm::GemmShape<8, 8, 16>,
+    cutlass::epilogue::thread::LinearCombinationClamp<
+      ElementOutput,
+      64 / cutlass::sizeof_bits<ElementOutput>::value,
+      ElementAccumulator,
+      ElementCompute
+    >,
+    cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>,
+    2
+  >;
+
+  EXPECT_TRUE(test::gemm::device::TestAllGemm<Gemm>());
+}
+
+TEST(SM75_Device_Gemm_s8t_s8n_s8t_tensor_op_s32, 256x32x64_64x32x64) {
+
+  using ElementOutput = int8_t;
+  using ElementAccumulator = int32_t;
+  using ElementCompute = float;
+
+  using Gemm = cutlass::gemm::device::Gemm<
+    int8_t,
+    cutlass::layout::RowMajor,
+    int8_t,
+    cutlass::layout::ColumnMajor,
+    ElementOutput,
+    cutlass::layout::RowMajor,
+    ElementAccumulator,
+    cutlass::arch::OpClassTensorOp,
+    cutlass::arch::Sm75,
+    cutlass::gemm::GemmShape<256, 32, 64>,
+    cutlass::gemm::GemmShape<64, 32, 64>,
+    cutlass::gemm::GemmShape<8, 8, 16>,
+    cutlass::epilogue::thread::LinearCombinationClamp<
+      ElementOutput,
+      64 / cutlass::sizeof_bits<ElementOutput>::value,
+      ElementAccumulator,
+      ElementCompute
+    >,
+    cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>,
+    2
+  >;
+
+  EXPECT_TRUE(test::gemm::device::TestAllGemm<Gemm>());
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
 #endif

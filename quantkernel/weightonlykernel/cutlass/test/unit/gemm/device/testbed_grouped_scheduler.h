@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -312,7 +312,8 @@ template <typename ThreadblockShape,
           cutlass::gemm::kernel::GroupScheduleMode... Args>
 struct TestbedGroupedGemmScheduler {
 
-  using BaselinePV = BaselineProblemVisitor<cutlass::gemm::kernel::detail::GemmGroupedProblemSizeHelper<Transpose>,
+  using PSHelper = cutlass::gemm::kernel::detail::GemmGroupedProblemSizeHelper<ThreadblockShape, Transpose>;
+  using BaselinePV = BaselineProblemVisitor<PSHelper,
                                             ThreadblockShape,
                                             PrefetchTileCount,
                                             ThreadCount>;

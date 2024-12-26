@@ -21,6 +21,7 @@
 #include <vector>
 #include <stdexcept>
 
+using namespace tensorrt_llm::cutlass_extensions;
 namespace fastertransformer {
 
 struct TileShape {

@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,7 +31,6 @@
 /*! \file
     \brief Helpers for printing cutlass/core objects
 */
-
 #pragma once
 
 #include <iostream>
@@ -45,7 +44,7 @@
 #include "cutlass/matrix_shape.h"
 #include "cutlass/layout/pitch_linear.h"
 #include "cutlass/tensor_view.h"
-#include "cutlass/gemm/gemm.h"
+#include "cutlass/gemm/gemm_enumerated_types.h"
 #include "cutlass/conv/convolution.h"
 #include "cutlass/conv/conv2d_problem_size.h"
 #include "cutlass/conv/conv3d_problem_size.h"
@@ -252,8 +251,9 @@ namespace conv {
 inline
 std::ostream& operator<<(std::ostream& out, Conv2dProblemSize const& problem) {
   out << "NHWC: (" << problem.N << ", " << problem.H << ", " << problem.W << ", " << problem.C << ")" << std::endl
-      << "KRSC: (" << problem.K << ", " << problem.R << ", " << problem.S << ", " << problem.C << ")" << std::endl
+      << "KRSC: (" << problem.K << ", " << problem.R << ", " << problem.S << ", " << problem.C / problem.groups << ")" << std::endl
       << "NPQK: (" << problem.N << ", " << problem.P << ", " << problem.Q << ", " << problem.K << ")" << std::endl
+      << "groups: (" << problem.groups << ")" << std::endl
       << "Pad_h, Pad_w: (" << problem.pad_h << ", " << problem.pad_w << ")" << std::endl
       << "Stride_h, Stride_w: (" << problem.stride_h << ", " << problem.stride_w << ")" << std::endl
       << "Dilation_h, Dilation_w: (" << problem.dilation_h << ", " << problem.dilation_w << ")" << std::endl

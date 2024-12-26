@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -77,7 +77,6 @@ public:
   using OutputTileIterator = OutputTileIterator_;
   using AccumulatorFragmentIterator = AccumulatorFragmentIterator_;
   using WarpTileIterator = WarpTileIterator_;
-  using SharedLoadIterator = SharedLoadIterator_;
   using OutputOp = OutputOp_;
   using Padding = MatrixShape<0, 0>;
 

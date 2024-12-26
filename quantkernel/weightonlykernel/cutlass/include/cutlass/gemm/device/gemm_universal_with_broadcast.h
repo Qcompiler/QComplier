@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,8 +28,10 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  **************************************************************************************************/
+
 /*! \file
-    \brief
+    \brief Template for a GEMM kernel that can broadcast bias vector in the
+           epilogue.
 */
 
 #pragma once
@@ -45,7 +47,7 @@
 #include "cutlass/gemm/kernel/gemm_universal.h"
 
 #include "cutlass/gemm/kernel/default_gemm_universal.h"
-#include "cutlass/gemm/kernel/default_gemm_with_broadcast_v2.h"
+#include "cutlass/gemm/kernel/default_gemm_with_broadcast.h"
 #include "cutlass/gemm/device/default_gemm_configuration.h"
 #include "cutlass/gemm/device/gemm_universal_base.h"
 
@@ -97,7 +99,7 @@ template <
     /// Epilogue output operator      - must satisfy concept of 'EpilogueWithBroadcastOp'
     typename EpilogueOutputOp_ = cutlass::epilogue::thread::LinearCombinationBiasElementwise<
         ElementC_, ElementAccumulator_, ElementAccumulator_,
-        ElementC_, ElementC_, 16 / sizeof(ElementC_)>,
+        ElementC_, ElementC_, 128 / cutlass::sizeof_bits<ElementC_>::value>,
     /// Threadblock-level swizzling operator
     typename ThreadblockSwizzle_ = threadblock::GemmIdentityThreadblockSwizzle<>,
     /// Number of stages used in the pipelined mainloop
@@ -123,7 +125,7 @@ template <
 >
 class GemmUniversalWithBroadcast :
   public GemmUniversalBase<
-    typename kernel::DefaultGemmWithBroadcastV2<
+    typename kernel::DefaultGemmWithBroadcast<
       ElementA_,
       LayoutA_,
       TransformA,
@@ -166,7 +168,7 @@ class GemmUniversalWithBroadcast :
   static ComplexTransform const kTransformB = TransformB;
 
   using Base = GemmUniversalBase<
-    typename kernel::DefaultGemmWithBroadcastV2<
+    typename kernel::DefaultGemmWithBroadcast<
       ElementA_,
       LayoutA_,
       TransformA,
@@ -196,7 +198,7 @@ class GemmUniversalWithBroadcast :
 
 ////////////////////////////////////////////////////////////////////////////////
 
-/// Parital specialization for column-major output exchanges problem size and operand.
+/// Partial specialization for column-major output exchanges problem size and operand.
 template <
     /// Element type for A matrix operand
     typename ElementA_,

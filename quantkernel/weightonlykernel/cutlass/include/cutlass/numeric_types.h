@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,31 +35,12 @@
 #pragma once
 
 #include "cutlass/cutlass.h"
+#include "cutlass/platform/platform.h"
+#include "cutlass/numeric_size.h"
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
 
 namespace cutlass {
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-
-/// Defines the size of an element in bits
-template <typename T>
-struct sizeof_bits {
-  static int const value = int(sizeof(T) * 8);
-};
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-
-//
-// Definitions for 1-bit binary and 4-bit integer types
-//
-
-/// 1-bit binary type
-using bin1_t = bool;
-
-/// Defines the size of an element in bits - specialized for bin1_t
-template <>
-struct sizeof_bits<bin1_t> {
-  static int const value = 1;
-};
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -77,17 +58,31 @@ struct index_sequence_helper<0, 0, Next...> {
 template <size_t N>
 using make_index_sequence = typename index_sequence_helper<N>::type;
 
+
 /////////////////////////////////////////////////////////////////////////////////////////////////
+//
+// Get the register type used in kernel
+//
+/////////////////////////////////////////////////////////////////////////////////////////////////
+
+namespace detail {
+
+template<typename T>
+struct get_unpacked_element_type {
+  using type = T;
+};
+
+} // namespace detail
 
 }  // namespace cutlass
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "cutlass/integer_subbyte.h"
-
 #include "cutlass/half.h"
 #include "cutlass/bfloat16.h"
 #include "cutlass/tfloat32.h"
-
+#include "cutlass/float8.h"
+#include "cutlass/uint128.h"
 /////////////////////////////////////////////////////////////////////////////////////////////////
 

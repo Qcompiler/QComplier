@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -149,13 +149,12 @@ public:
 
       CUTLASS_PRAGMA_UNROLL
       for (int i = 0; i < kIterations / 4; ++i) {
-        ElementOutput tmp;
+        ElementOutput *source_ptr = reinterpret_cast<ElementOutput *>(&source);
         cutlass::arch::global_load<ElementOutput, sizeof(ElementOutput)>(
-                                                  tmp,
+                                                  source_ptr[i],
                                                   (void *)(pointer_ + i * 32),
                                                   guard[i] && LoadForSerialSplitK);
 
-        source[i] = tmp;
       }
 
       FragmentAccumulator sum = gemm_k_with_reduction_accumulation;

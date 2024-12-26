@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -157,7 +157,7 @@ private:
   static void reorder_array(T* data, const std::vector<size_t>& indices) {
     // For now, simply create a copy of the data and then copy over to the original.
     std::vector<T> copy(indices.size());
-    for (int i = 0; i < indices.size(); ++i) {
+    for (size_t i = 0; i < indices.size(); ++i) {
       copy.at(i) = data[indices[i]];
     }
 
@@ -211,7 +211,7 @@ public:
   /// Computes the maximum number of active blocks per multiprocessor
   static int maximum_active_blocks(int smem_capacity = -1) {
 
-    CUTLASS_TRACE_HOST("GemmUniversalBase::maximum_active_blocks()");
+    CUTLASS_TRACE_HOST("BaseGrouped::maximum_active_blocks()");
 
     int smem_size = int(sizeof(typename BaseKernel::SharedStorage));
 
@@ -290,7 +290,6 @@ public:
                         int available_sm_count=-1) {
     // Determine the number of blocks that would be launched to fill up a single
     // wave on the GPU with each SM having maximum occupancy.
-    cudaDeviceProp properties;
     int device_idx;
     cudaError_t result = cudaGetDevice(&device_idx);
     if (result != cudaSuccess) {
@@ -301,18 +300,19 @@ public:
       return 0;
     }
 
-    result = cudaGetDeviceProperties(&properties, device_idx);
+    int multiprocessor_count;
+    result = cudaDeviceGetAttribute(&multiprocessor_count,
+      cudaDevAttrMultiProcessorCount, device_idx);
     if (result != cudaSuccess) {
-      // Call cudaGetLastError() to clear the error bit
-      result = cudaGetLastError();
-      CUTLASS_TRACE_HOST("  cudaGetDeviceProperties() returned error "
-          << cudaGetErrorString(result));
+      CUTLASS_TRACE_HOST(
+        "  cudaDeviceGetAttribute() returned error "
+        << cudaGetErrorString(result));
       return 0;
     }
 
-    bool override_sm_count = (available_sm_count < 0 || available_sm_count > properties.multiProcessorCount);
+    bool override_sm_count = (available_sm_count < 0 || available_sm_count > multiprocessor_count);
     if (override_sm_count) {
-      available_sm_count = properties.multiProcessorCount;
+      available_sm_count = multiprocessor_count;
     }
 
     int max_active_blocks = maximum_active_blocks();
@@ -342,14 +342,14 @@ public:
     // which are not assigned tiles still need to perform the work of iterating through
     // problem sizes to determine that they have no work to do. This competes for cycles
     // with those threadblocks that are assigned tiles to compute.
-    return min(total_tiles, occupancy_based_block_count);
+    return std::min(total_tiles, occupancy_based_block_count);
   }
 
 
   /// Initializes GEMM state from arguments.
   Status initialize(Arguments const &args, void *workspace = nullptr, cudaStream_t stream = nullptr) {
 
-    CUTLASS_TRACE_HOST("GemmUniversalBase::initialize() - workspace "
+    CUTLASS_TRACE_HOST("BaseGrouped::initialize() - workspace "
       << workspace << ", stream: " << (stream ? "non-null" : "null"));
 
     // Workspace
@@ -440,8 +440,6 @@ public:
     cudaError_t result = cudaGetLastError();
 
     if (result != cudaSuccess) {
-      // Call cudaGetLastError() to clear the error bit
-      result = cudaGetLastError();
       CUTLASS_TRACE_HOST("  grid launch failed with error " << cudaGetErrorString(result));
       return Status::kErrorInternal;
     }

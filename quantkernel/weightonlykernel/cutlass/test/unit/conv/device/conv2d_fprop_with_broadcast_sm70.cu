@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -60,7 +60,7 @@ template <
  template<typename T> class UnaryOp,
  bool TestSplitK = false 
 >
-void TestResidaulBlock() {
+void Conv2dFpropSM70TestResidualBlock() {
   using ElementA = cutlass::half_t;
   using ElementB = cutlass::half_t;
   using ElementC = cutlass::half_t;
@@ -117,7 +117,7 @@ void TestResidaulBlock() {
 TEST(SM70_Device_Conv2d_Fprop_With_Residual_Block_Plus_Optimized_ImplicitGemm_f16nhwc_f16nhwc_f32nhwc_tensor_op_f32,
      128x128_32x2_64x64x32) {
   // Resnet
-  TestResidaulBlock<float, cutlass::epilogue::thread::ReLu, cutlass::plus, cutlass::epilogue::thread::Identity>();
+  Conv2dFpropSM70TestResidualBlock<float, cutlass::epilogue::thread::ReLu, cutlass::plus, cutlass::epilogue::thread::Identity>();
 }
 
 ////////////////////////////////////////////////////////////////////////////////

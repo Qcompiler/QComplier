@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -57,6 +57,9 @@ namespace device {
 template <typename Gemm, int InterleavedK>
 struct InterleavedTestbed {
 
+  using ElementA = typename Gemm::ElementA;
+  using ElementB = typename Gemm::ElementB;
+  using ElementC = typename Gemm::ElementC;
   using ElementAccumulator = typename Gemm::ElementAccumulator;
   using ElementCompute = typename Gemm::GemmKernel::Epilogue::OutputOp::ElementCompute;
 
@@ -100,7 +103,6 @@ struct InterleavedTestbed {
         view.data(), view.capacity());
     } 
     else {
-      // TODO: Implement the rest
       EXPECT_TRUE(false) << "Not implemented";
       return false;
     }
@@ -114,7 +116,7 @@ struct InterleavedTestbed {
     // Determine SMEM requirements and waive if not satisfied
     //
 
-    int smem_size = int(sizeof(typename Gemm::GemmKernel::SharedStorage));
+    size_t smem_size = sizeof(typename Gemm::GemmKernel::SharedStorage);
 
     cudaDeviceProp properties;
     int device_idx;
@@ -130,7 +132,7 @@ struct InterleavedTestbed {
       throw std::runtime_error("cudaGetDeviceProperties() failed");
     }
 
-    if (properties.sharedMemPerMultiprocessor < smem_size) {
+    if (properties.sharedMemPerBlockOptin < smem_size) {
       return false;
     }
 

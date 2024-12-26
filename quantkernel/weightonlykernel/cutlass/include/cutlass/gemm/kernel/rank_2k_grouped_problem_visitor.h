@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -279,6 +279,14 @@ struct Rank2KGroupedProblemVisitorOffsetHelper<
 template <typename ThreadblockShape>
 struct Rank2KGroupedProblemSizeHelper {
   using OffsetHelper = Rank2KGroupedProblemVisitorOffsetHelper<ThreadblockShape>;
+
+  CUTLASS_HOST_DEVICE
+  static cutlass::gemm::GemmCoord grid_shape(const cutlass::gemm::GemmCoord& problem) {
+    return cutlass::gemm::GemmCoord(
+      ((problem.m() - 1 + ThreadblockShape::kM) / ThreadblockShape::kM),
+      ((problem.n() - 1 + ThreadblockShape::kN) / ThreadblockShape::kN),
+      1);
+  }
 
   CUTLASS_HOST_DEVICE
   static int32_t tile_count(const cutlass::gemm::GemmCoord& grid) {

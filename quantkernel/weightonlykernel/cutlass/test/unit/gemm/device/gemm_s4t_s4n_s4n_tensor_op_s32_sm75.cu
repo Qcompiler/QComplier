@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -49,7 +49,6 @@
 #include "testbed.h"
 
 #if defined(CUTLASS_ARCH_MMA_SM75_SUPPORTED)
-
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 TEST(SM75_Device_Gemm_s4t_s4n_s4n_tensor_op_s32, 128x256x128_64x64x128) {
@@ -81,7 +80,7 @@ TEST(SM75_Device_Gemm_s4t_s4n_s4n_tensor_op_s32, 128x256x128_64x64x128) {
     2
   >;
 
-  EXPECT_TRUE(test::gemm::device::TestAllGemm<Gemm>());
+  EXPECT_TRUE(test::gemm::device::TestAllGemmBasic<Gemm>());
 }
 
 TEST(SM75_Device_Gemm_s4t_s4n_s4n_tensor_op_s32, 256x128x128_64x64x128) {
@@ -113,7 +112,39 @@ TEST(SM75_Device_Gemm_s4t_s4n_s4n_tensor_op_s32, 256x128x128_64x64x128) {
     2
   >;
 
-  EXPECT_TRUE(test::gemm::device::TestAllGemm<Gemm>());
+  EXPECT_TRUE(test::gemm::device::TestAllGemmBasic<Gemm>());
+}
+
+TEST(SM75_Device_Gemm_s4t_s4n_s4n_tensor_op_s32_align8, 256x128x128_64x64x128) {
+
+  using ElementOutput = cutlass::int4b_t;
+  using ElementAccumulator = int32_t;
+  using ElementCompute = float;
+
+  using Gemm = cutlass::gemm::device::Gemm<
+    cutlass::int4b_t,
+    cutlass::layout::RowMajor,
+    cutlass::int4b_t,
+    cutlass::layout::ColumnMajor,
+    ElementOutput,
+    cutlass::layout::ColumnMajor,
+    ElementAccumulator,
+    cutlass::arch::OpClassTensorOp,
+    cutlass::arch::Sm75,
+    cutlass::gemm::GemmShape<256, 128, 128>,
+    cutlass::gemm::GemmShape<64, 64, 128>,
+    cutlass::gemm::GemmShape<8, 8, 32>,
+    cutlass::epilogue::thread::LinearCombinationClamp<
+      ElementOutput,
+      8,
+      ElementAccumulator,
+      ElementCompute
+    >,
+    cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>,
+    2
+  >;
+
+  EXPECT_TRUE(test::gemm::device::TestAllGemmBasic<Gemm>());
 }
 
 TEST(SM75_Device_Gemm_s4t_s4n_s4n_tensor_op_s32, 128x128x128_64x64x128) {
@@ -145,7 +176,7 @@ TEST(SM75_Device_Gemm_s4t_s4n_s4n_tensor_op_s32, 128x128x128_64x64x128) {
     2
   >;
 
-  EXPECT_TRUE(test::gemm::device::TestAllGemm<Gemm>());
+  EXPECT_TRUE(test::gemm::device::TestAllGemmBasic<Gemm>());
 }
 
 TEST(SM75_Device_Gemm_s4t_s4n_s4n_tensor_op_s32, 64x256x128_64x64x128) {
@@ -177,7 +208,7 @@ TEST(SM75_Device_Gemm_s4t_s4n_s4n_tensor_op_s32, 64x256x128_64x64x128) {
     2
   >;
 
-  EXPECT_TRUE(test::gemm::device::TestAllGemm<Gemm>());
+  EXPECT_TRUE(test::gemm::device::TestAllGemmBasic<Gemm>());
 }
 
 TEST(SM75_Device_Gemm_s4t_s4n_s4n_tensor_op_s32, 256x64x128_64x64x128) {
@@ -209,7 +240,7 @@ TEST(SM75_Device_Gemm_s4t_s4n_s4n_tensor_op_s32, 256x64x128_64x64x128) {
     2
   >;
 
-  EXPECT_TRUE(test::gemm::device::TestAllGemm<Gemm>());
+  EXPECT_TRUE(test::gemm::device::TestAllGemmBasic<Gemm>());
 }
 
 TEST(SM75_Device_Gemm_s4t_s4n_s4n_tensor_op_s32, 64x128x128_32x64x128) {
@@ -241,7 +272,7 @@ TEST(SM75_Device_Gemm_s4t_s4n_s4n_tensor_op_s32, 64x128x128_32x64x128) {
     2
   >;
 
-  EXPECT_TRUE(test::gemm::device::TestAllGemm<Gemm>());
+  EXPECT_TRUE(test::gemm::device::TestAllGemmBasic<Gemm>());
 }
 
 TEST(SM75_Device_Gemm_s4t_s4n_s4n_tensor_op_s32, 128x64x128_64x32x128) {
@@ -273,7 +304,7 @@ TEST(SM75_Device_Gemm_s4t_s4n_s4n_tensor_op_s32, 128x64x128_64x32x128) {
     2
   >;
 
-  EXPECT_TRUE(test::gemm::device::TestAllGemm<Gemm>());
+  EXPECT_TRUE(test::gemm::device::TestAllGemmBasic<Gemm>());
 }
 
 TEST(SM75_Device_Gemm_s4t_s4n_s4n_tensor_op_s32, 64x64x128_32x32x128) {
@@ -305,7 +336,7 @@ TEST(SM75_Device_Gemm_s4t_s4n_s4n_tensor_op_s32, 64x64x128_32x32x128) {
     2
   >;
 
-  EXPECT_TRUE(test::gemm::device::TestAllGemm<Gemm>());
+  EXPECT_TRUE(test::gemm::device::TestAllGemmBasic<Gemm>());
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////

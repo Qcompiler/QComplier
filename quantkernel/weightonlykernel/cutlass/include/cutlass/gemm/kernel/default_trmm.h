@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -121,6 +121,76 @@ template <
     /// Operation performed by GEMM
     typename Operator>
 struct DefaultTrmm;
+
+////////////////////////////////////////////////////////////////////////////////
+
+/// Partial specialization for Hopper Architecture
+template <
+    /// Element type for A matrix operand
+    typename ElementA,
+    /// Layout type for A matrix operand
+    typename LayoutA,
+    /// Access granularity of A matrix in units of elements
+    int kAlignmentA,
+    /// Element type for B matrix operand
+    typename ElementB,
+    /// Layout type for B matrix operand
+    typename LayoutB,
+    /// Access granularity of A matrix in units of elements
+    int kAlignmentB,
+    /// Side Mode for the kernel
+    SideMode kSideMode,
+    /// Fill Mode for the triangular matrix
+    FillMode kFillMode,
+    /// Diag Type for the triangular matrix
+    DiagType kDiagType,
+    /// Element type for C and D matrix operands
+    typename ElementC,
+    /// Element type for internal accumulation
+    typename ElementAccumulator,
+    /// Threadblock-level tile size (concept: GemmShape)
+    typename ThreadblockShape,
+    /// Warp-level tile size (concept: GemmShape)
+    typename WarpShape,
+    /// Warp-level tile size (concept: GemmShape)
+    typename InstructionShape,
+    /// Epilogue output operator
+    typename EpilogueOutputOp,
+    /// Threadblock-level swizzling operator
+    typename ThreadblockSwizzle,
+    /// Number of stages used in the pipelined mainloop
+    int Stages,
+    /// If true, kernel is configured to support serial reduction in the
+    /// epilogue
+    bool SplitKSerial,
+    /// Operation performed by GEMM
+    typename Operator>
+struct DefaultTrmm<ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlignmentB,
+                   kSideMode, kFillMode, kDiagType, ElementC,
+                   layout::RowMajor, ElementAccumulator, arch::OpClassTensorOp,
+                   arch::Sm90, ThreadblockShape, WarpShape, InstructionShape,
+                   EpilogueOutputOp, ThreadblockSwizzle, Stages, SplitKSerial,
+                   Operator> {
+                    
+  /// Define the threadblock-scoped triagular matrix multiply-accumulate
+  using Mma = typename cutlass::gemm::threadblock::DefaultTrmm<
+      ElementA, LayoutA, kAlignmentA, ElementB, LayoutB, kAlignmentB,
+      kSideMode, kFillMode, kDiagType, 
+      ElementAccumulator, layout::RowMajor, arch::OpClassTensorOp, arch::Sm90,
+      ThreadblockShape, WarpShape, InstructionShape, Stages,
+      Operator>::ThreadblockMma;
+
+  static const int kPartitionsK = ThreadblockShape::kK / WarpShape::kK;
+
+  /// Define the epilogue
+  using Epilogue =
+      typename cutlass::epilogue::threadblock::DefaultEpilogueTensorOp<
+          ThreadblockShape, typename Mma::Operator, kPartitionsK, EpilogueOutputOp,
+          EpilogueOutputOp::kCount>::Epilogue;
+
+  /// Define the kernel-level TRMM operator.
+  using TrmmKernel = kernel::TrmmUniversal<Mma, Epilogue, ThreadblockSwizzle, kSideMode, kFillMode, kDiagType>;
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 

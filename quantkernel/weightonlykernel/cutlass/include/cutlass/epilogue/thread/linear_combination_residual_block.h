@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,7 +30,7 @@
  **************************************************************************************************/
 
 /*! \file
-  \brief Epilogue functor specialized for residual blocks in deep neural network.
+  \brief Epilogue functor specialized for residual blocks in deep neural networks.
 */
 
 #pragma once
@@ -38,6 +38,7 @@
 #include "cutlass/array.h"
 #include "cutlass/functional.h"
 #include "cutlass/numeric_conversion.h"
+#include "cutlass/epilogue/thread/detail.hpp"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -45,24 +46,30 @@ namespace cutlass {
 namespace epilogue {
 namespace thread {
 
-// /// Models a residual block of the form: UnaryOp(BinaryOp(ActivationOp(TensorOp(X) + bias), residual))
+/// Models a residual block of the form: UnaryOp(BinaryOp(BinaryOp(ActivationOp(TensorOp(X) + bias), residual1), residual2))
 template <typename ElementOutput_, typename ElementAccumulator_,
           typename ElementCompute_, typename ElementC_, int ElementsPerAccess,
           template <typename T> class ActivationOp_,
-          template <typename T> class BinaryOp_,
-          template <typename T> class UnaryOp_>
+          template <typename T> class BinaryOp1_,
+          template <typename T> class UnaryOp_,
+          template <typename T> class BinaryOp2_ = detail::NoOp,
+          bool StoreT_ = false,
+          typename ElementVector_ = ElementC_>
 class LinearCombinationResidualBlock {
 public:
+  static bool const kIsSingleSource = false;
 
   using ElementOutput = ElementC_;
   using ElementC = ElementC_;
   using ElementAccumulator = ElementAccumulator_;
   using ElementCompute = ElementCompute_;
+  using ElementVector = ElementVector_;
   static int const kElementsPerAccess = ElementsPerAccess;
   static int const kCount = kElementsPerAccess;
 
   using UnaryOp = UnaryOp_<Array<ElementCompute, kCount>>;
-  using BinaryOp = BinaryOp_<Array<ElementCompute, kCount>>;
+  using BinaryOp1 = BinaryOp1_<Array<ElementCompute, kCount>>;
+  using BinaryOp2 = BinaryOp2_<Array<ElementCompute, kCount>>;
   using ActivationOp = ActivationOp_<Array<ElementCompute, kCount>>;
 
   using FragmentAccumulator = Array<ElementAccumulator, kElementsPerAccess>;
@@ -77,7 +84,132 @@ public:
 
   static bool const kIsHeavy = true;
   static bool const kStoreZ = true;
-  static bool const kStoreT = false;
+  static bool const kStoreT = StoreT_;
+
+  /// Host-constructable parameters structure
+  struct Params {
+
+    ElementCompute alpha;                  ///< scales accumulators
+    ElementCompute beta;                   ///< scales residual input
+    ElementCompute const *alpha_ptr{nullptr};       ///< pointer to accumulator scalar - if not null, loads it from memory
+    ElementCompute const *beta_ptr{nullptr};        ///< pointer to residual scalar - if not null, loads it from memory
+
+    CUTLASS_HOST_DEVICE
+    Params() : alpha(ElementCompute(1)), beta(ElementCompute(1)) {}
+
+    CUTLASS_HOST_DEVICE
+    Params(ElementCompute alpha, ElementCompute beta)
+        : alpha(alpha), beta(beta) {}
+
+    CUTLASS_HOST_DEVICE
+    Params(ElementCompute const *alpha_ptr, ElementCompute const *beta_ptr)
+        : alpha(0), beta(0), alpha_ptr(alpha_ptr), beta_ptr(beta_ptr) {}
+  };
+
+private:
+
+  ElementCompute alpha_;
+  ElementCompute beta_;
+  bool skip_elementwise_;
+
+public:
+
+  /// Constructor from Params
+  CUTLASS_HOST_DEVICE
+  LinearCombinationResidualBlock(Params const &params) {
+    alpha_ = (params.alpha_ptr ? *params.alpha_ptr : params.alpha);
+    beta_ = (params.beta_ptr ? *params.beta_ptr : params.beta);
+    skip_elementwise_ = false;
+  }
+
+  /// The "source" tensor corresponds to the residual input
+  CUTLASS_HOST_DEVICE
+  bool is_source_needed() const { return true; }
+
+  /// Functionally required for serial reduction in the epilogue
+  /// IMPORTANT: Split-k is supported only when ActivationOp is Identity.
+  CUTLASS_HOST_DEVICE
+  void set_k_partition(int k_partition, int k_partition_count) {
+    if (k_partition) {
+      beta_ = ElementCompute(1);
+    }
+
+    if (k_partition != k_partition_count - 1) {
+      skip_elementwise_ = true;
+    }
+  }
+
+  /// Applies the operation UnaryOp(BinaryOp(BinaryOp(ActivationOp(AB + bias), residual1), residual2))
+  CUTLASS_HOST_DEVICE
+  void operator()(FragmentOutput &frag_Z, FragmentOutput &, FragmentAccumulator const &AB,
+                  FragmentC const &residual1, FragmentC const &residual2,
+                  FragmentCompute const &bias) const {
+    UnaryOp unary_op;
+    BinaryOp1 binary_op1;
+    BinaryOp2 binary_op2;
+    ActivationOp activation;
+
+    FragmentCompute tmp_Accum =
+        NumericArrayConverter<ElementCompute, ElementAccumulator, kElementsPerAccess>()(AB);
+    FragmentCompute tmp_residual1 =
+        NumericArrayConverter<ElementCompute, ElementC, kElementsPerAccess>()(residual1);
+    FragmentCompute tmp_residual2 =
+        NumericArrayConverter<ElementCompute, ElementC, kElementsPerAccess>()(residual2);
+
+    FragmentCompute z =
+        binary_op2(binary_op1(activation(alpha_ * tmp_Accum + bias), beta_ * tmp_residual1), beta_ * tmp_residual2);
+    FragmentCompute result_Z = skip_elementwise_ ? z : unary_op(z);
+
+    NumericArrayConverter<ElementOutput, ElementCompute, kElementsPerAccess> convert_z;
+    frag_Z = convert_z(result_Z);
+  }
+
+  /// Should never be called
+  CUTLASS_HOST_DEVICE
+  void operator()(FragmentOutput &, FragmentOutput &, FragmentAccumulator const &,
+                  FragmentCompute const &) const {}
+};
+
+/// Models a residual block of the form: UnaryOp(BinaryOp(ActivationOp(TensorOp(X) + bias), residual))
+template <typename ElementOutput_, typename ElementAccumulator_,
+          typename ElementCompute_, typename ElementC_, int ElementsPerAccess,
+          template <typename T> class ActivationOp_,
+          template <typename T> class BinaryOp1_,
+          template <typename T> class UnaryOp_,
+          bool StoreT_,
+          typename ElementVector_>
+class LinearCombinationResidualBlock<ElementOutput_, ElementAccumulator_,
+          ElementCompute_, ElementC_, ElementsPerAccess,
+          ActivationOp_, BinaryOp1_, UnaryOp_,
+          detail::NoOp, StoreT_, ElementVector_> {
+public:
+  static bool const kIsSingleSource = true;
+
+  using ElementOutput = ElementC_;
+  using ElementC = ElementC_;
+  using ElementAccumulator = ElementAccumulator_;
+  using ElementCompute = ElementCompute_;
+  using ElementVector = ElementVector_;
+  static int const kElementsPerAccess = ElementsPerAccess;
+  static int const kCount = kElementsPerAccess;
+
+  using UnaryOp = UnaryOp_<Array<ElementCompute, kCount>>;
+  using BinaryOp = BinaryOp1_<Array<ElementCompute, kCount>>;
+  using ActivationOp = ActivationOp_<Array<ElementCompute, kCount>>;
+
+  using FragmentAccumulator = Array<ElementAccumulator, kElementsPerAccess>;
+  using FragmentCompute = Array<ElementCompute, kElementsPerAccess>;
+  using FragmentC = Array<ElementC, kElementsPerAccess>;
+  using FragmentOutput = Array<ElementOutput, kElementsPerAccess>;
+
+  using ElementZ = ElementOutput_;
+  using ElementT = ElementZ;
+  using FragmentZ = Array<ElementZ, kElementsPerAccess>;
+  using FragmentT = Array<ElementT, kElementsPerAccess>;
+
+  static bool const kIsHeavy = true;
+  static bool const kStoreZ = true;
+  static bool const kStoreT = StoreT_;
 
   /// Host-constructable parameters structure
   struct Params {

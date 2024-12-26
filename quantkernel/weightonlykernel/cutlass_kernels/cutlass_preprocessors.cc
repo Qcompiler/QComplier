@@ -82,46 +82,42 @@ struct getLayoutDetails<cutlass::layout::ColumnMajorTileInterleave<RowsPerTile, 
     }
 };
 
-template<typename cutlassArch, typename TypeB>
+template <typename cutlassArch, typename TypeA, typename TypeB>
 LayoutDetails getLayoutDetailsForArchAndQuantType()
 {
 
-    using CompileTraits    = cutlass::gemm::kernel::LayoutDetailsB<TypeB, cutlassArch>;
-    using LayoutB          = typename CompileTraits::Layout;
-    using MmaOperator      = typename CompileTraits::Operator;
-    LayoutDetails details  = getLayoutDetails<LayoutB>()();
+    using CompileTraits = cutlass::gemm::kernel::LayoutDetailsB<TypeA, TypeB, cutlassArch>;
+    using LayoutB = typename CompileTraits::Layout;
+    using MmaOperator = typename CompileTraits::Operator;
+    LayoutDetails details = getLayoutDetails<LayoutB>()();
     details.uses_imma_ldsm = std::is_same<MmaOperator, cutlass::arch::OpMultiplyAddDequantizeInterleavedBToA>::value;
     return details;
 }
 
-template<typename cutlassArch>
+template <typename cutlassArch>
 LayoutDetails getLayoutDetailsForArch(QuantType quant_type)
 {
-    LayoutDetails details;
-    if (quant_type == QuantType::INT8_WEIGHT_ONLY) {
-        details = getLayoutDetailsForArchAndQuantType<cutlassArch, uint8_t>();
-    }
-    else if (quant_type == QuantType::PACKED_INT4_WEIGHT_ONLY) {
-        details = getLayoutDetailsForArchAndQuantType<cutlassArch, cutlass::uint4b_t>();
-    }
-    else {
-        FT_CHECK_WITH_INFO(false, "Unsupported quantization type");
-    }
+    LayoutDetails details = getLayoutDetailsForArchAndQuantType<cutlassArch, cutlass::half_t, uint8_t>();
+     
     return details;
 }
 
 LayoutDetails getLayoutDetailsForTransform(QuantType quant_type, int arch)
 {
-    if (arch >= 70 && arch < 75) {
-        return getLayoutDetailsForArch<cutlass::arch::Sm70>(quant_type);
-    }
-    else if (arch >= 75 && arch < 80) {
+    if (arch >= 75 && arch < 80)
+    {
         return getLayoutDetailsForArch<cutlass::arch::Sm75>(quant_type);
     }
-    else if (arch >= 80 && arch <= 90) {
+    else if (arch >= 80 && arch < 90)
+    {
         return getLayoutDetailsForArch<cutlass::arch::Sm80>(quant_type);
     }
-    else {
+    else if (arch == 90)
+    {
+        return getLayoutDetailsForArch<cutlass::arch::Sm90>(quant_type);
+    }
+    else
+    {
         FT_CHECK_WITH_INFO(false, "Unsupported Arch");
         return LayoutDetails();
     }

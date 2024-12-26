@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -56,7 +56,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////// Integer wmma.mma ////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// TODO: FIXME SM75 should SM72, but the compilation breaks as SM72 shows up and runs on VOLTA
+// TODO: SM75 should be SM72, but the compilation breaks as SM72 shows up and runs on VOLTA
 TEST(SM75_warp_wmma_row_col_s8, 16x16x16_16x16x16_16x16x16) {
   // Threadblock and warp with just one native WMMA operation (most basic unit test)
   using WarpShape = cutlass::gemm::GemmShape<16, 16, 16>;

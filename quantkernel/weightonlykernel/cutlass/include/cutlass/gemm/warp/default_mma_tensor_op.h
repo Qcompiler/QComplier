@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -118,6 +118,6 @@ struct DefaultMmaTensorOp {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-#include "default_mma_tensor_op_sm80.h"
+#include "cutlass/gemm/warp/default_mma_tensor_op_sm80.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////

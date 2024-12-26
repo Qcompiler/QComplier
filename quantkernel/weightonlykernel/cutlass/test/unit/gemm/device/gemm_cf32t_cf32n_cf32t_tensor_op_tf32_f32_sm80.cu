@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -56,7 +56,7 @@
 //  Operands data type: complex<float>
 //  Rounding: float -> tfloat32_t (round to nearest)
 //  Instruction operand data type: tfloat32_t (real part) and  tfloat32_t (imaginary part)
-//  Math instruction: MMA.1688.F32.TF32
+//  Math instruction: mma.sync.aligned.m16n8k8.f32.tf32.tf32.f32
 //  Instruction output/accumulation data type: f32 (real part) and f32 (imaginary part)
 //  Output data type: complex<float>
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -161,7 +161,7 @@ TEST(SM80_Device_Gemm_cf32t_cf32n_cf32t_tensor_op_tf32_f32, 64x64x16_32x32x16) {
 
 TEST(SM80_Device_Gemm_cf32t_cf32n_cf32t_tensor_op_tf32_f32, 128x64x16_64x32x16) {
 
-  using Element = cutlass::complex<float>;;
+  using Element = cutlass::complex<float>;
 
   using Gemm = cutlass::gemm::device::GemmComplex<
     Element,
@@ -193,7 +193,7 @@ TEST(SM80_Device_Gemm_cf32t_cf32n_cf32t_tensor_op_tf32_f32, 128x64x16_64x32x16) 
 
 TEST(SM80_Device_Gemm_cf32t_cf32n_cf32t_tensor_op_tf32_f32, 64x128x16_32x64x16) {
 
-  using Element = cutlass::complex<float>;;
+  using Element = cutlass::complex<float>;
 
   using Gemm = cutlass::gemm::device::GemmComplex<
     Element,
@@ -225,7 +225,7 @@ TEST(SM80_Device_Gemm_cf32t_cf32n_cf32t_tensor_op_tf32_f32, 64x128x16_32x64x16) 
 
 TEST(SM80_Device_Gemm_cf32t_cf32n_cf32t_tensor_op_tf32_f32, 128x128x16_32x64x16) {
 
-  using Element = cutlass::complex<float>;;
+  using Element = cutlass::complex<float>;
 
   using Gemm = cutlass::gemm::device::GemmComplex<
     Element,

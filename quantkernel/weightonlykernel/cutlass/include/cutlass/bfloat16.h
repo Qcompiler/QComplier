@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,16 +33,21 @@
     \brief Defines a proxy class for storing non-standard 16-bit floating point values with
           8 bits of exponent and 7 bit of mantissa.
 */
+
 #pragma once
 
-#if !defined(__CUDACC_RTC__)
+#if defined(__CUDACC_RTC__)
+#include "cutlass/floating_point_nvrtc.h"
+#else
 #include <cmath>
 #include <limits>
 #include <cstdint>
 #include <cstring>
 #endif
 
+#include <cuda_bf16.h>
 #include "cutlass/cutlass.h"
+#include "cutlass/platform/platform.h"
 
 namespace cutlass {
 
@@ -70,9 +75,41 @@ struct alignas(2) bfloat16_t {
     return h;
   }
 
-  /// Default constructor
+private:
+  struct from_32_bit_integer_t {};
+  static constexpr from_32_bit_integer_t from_32_bit_integer{};
+
+  template<class T>
   CUTLASS_HOST_DEVICE
-  bfloat16_t() : storage(0) { }
+  explicit bfloat16_t(from_32_bit_integer_t, T x) {
+    static_assert(cutlass::platform::is_integral<T>::value && sizeof(T) == 4, "Requires 32-bit integer");
+
+    float flt = static_cast<float>(x);
+    uint32_t bits;
+
+    #if defined(__CUDA_ARCH__)
+    bits = reinterpret_cast<uint32_t &>(flt);
+    #else
+    std::memcpy(&bits, &flt, sizeof(bits));
+    #endif
+
+    storage = uint16_t(bits >> 16);
+  }
+
+public:
+  /// Default constructor
+  bfloat16_t() = default;
+
+  /// Reinterpret cast from CUDA's __nv_bfloat16 type
+  CUTLASS_HOST_DEVICE
+  explicit bfloat16_t(__nv_bfloat16 const & x) {
+    #if defined(__CUDA_ARCH__)
+    storage = reinterpret_cast<uint16_t const &>(x);
+    #else
+    __nv_bfloat16_raw raw(x);
+    std::memcpy(&storage, &raw.x, sizeof(storage));
+    #endif
+  }
 
   /// Floating-point conversion - round toward nearest
   CUTLASS_HOST_DEVICE
@@ -117,18 +154,10 @@ struct alignas(2) bfloat16_t {
 
   /// Integer conversion - round toward nearest
   CUTLASS_HOST_DEVICE
-  explicit bfloat16_t(int x) {
-    float flt = static_cast<float>(x);
-    uint32_t bits;
+  explicit bfloat16_t(int x) : bfloat16_t(from_32_bit_integer, x) {}
 
-    #if defined(__CUDA_ARCH__)
-    bits = reinterpret_cast<uint32_t &>(flt);
-    #else
-    std::memcpy(&bits, &flt, sizeof(bits));
-    #endif
-
-    storage = uint16_t(bits >> 16);
-  }
+  CUTLASS_HOST_DEVICE
+  explicit bfloat16_t(uint32_t x) : bfloat16_t(from_32_bit_integer, x) {}
 
   /// Converts to float
   CUTLASS_HOST_DEVICE
@@ -200,7 +229,7 @@ bool signbit(cutlass::bfloat16_t const& h) {
 
 CUTLASS_HOST_DEVICE
 cutlass::bfloat16_t abs(cutlass::bfloat16_t const& h) {
-  return cutlass::bfloat16_t::bitcast(h.raw() & 0x7fffffff);
+  return cutlass::bfloat16_t::bitcast(h.raw() & 0x7fff);
 }
 
 CUTLASS_HOST_DEVICE

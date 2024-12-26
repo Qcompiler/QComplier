@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1079,7 +1079,7 @@ class RegularTileIterator<
   //
 
   /// The crosswised elements will be stored in a line.
-  /// line_size is size of crosswised dimention plus padding.
+  /// line_size is size of crosswised dimension plus padding.
   /// in units of AccessType
   Index line_size;
 

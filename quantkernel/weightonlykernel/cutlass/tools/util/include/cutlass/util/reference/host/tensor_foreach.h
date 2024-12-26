@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -69,7 +69,7 @@ struct TensorForEachHelper<Func, Rank, 0> {
   /// Index of the active rank
   static int const kActiveRank = Rank - 1;
 
-  /// Constructor for fastest chaning rank
+  /// Constructor for fastest changing rank
   TensorForEachHelper(
     Func &func,
     Coord<Rank> const &extent,

@@ -1,6 +1,6 @@
-![ALT](/media/images/gemm-hierarchy-with-epilogue-no-labels.png "CUTLASS Profiler")
+![ALT](../images/gemm-hierarchy-with-epilogue-no-labels.png "CUTLASS Profiler")
 
-[README](/README.md#documentation) > **CUTLASS Profiler**
+[README](../../README.md#documentation) > **CUTLASS Profiler**
 
 # CUTLASS Profiler
 
@@ -13,7 +13,7 @@ The CUTLASS Profiler may be compiled with:
 $ make cutlass_profiler -j
 ```
 
-To limit compilation time, only one tile size (typically 128x128) is instantiated for each data type, 
+To limit compilation time, only one tile size (typically 128x128) and threadblock cluster size (typically 2x1x1) is instantiated for each data type, 
 math instruction, and layout. To instantiate all sizes, set the following environment variable when running CMake from an 
 empty `build/` directory.
 ```bash
@@ -168,8 +168,8 @@ Example:
 The CUTLASS Profiler is capable of executing GEMM and Sparse GEMM problems.
 
 The CUTLASS Profiler can be built with cuBLAS enabled to use as a reference implementation. If CMake detects
-the cuBLASS library available in the system, it is included as a dependency. This may be explicitly overridden
-with CMake flag `CUTLASS_ENABLE_CUBLAS`. 
+the cuBLAS library available in the system, it is included as a dependency. This may be explicitly overridden
+with CMake flag `CUTLASS_ENABLE_CUBLAS`.
 
 ## GEMM Arguments
 
@@ -181,7 +181,7 @@ $ ./tools/profiler/cutlass_profiler --operation=gemm --help
 
 GEMM
 
-  [enum]      --Gemm_kind                                       Variant of GEMM (e.g. gemm, batched, ...)
+  [enum]      --gemm_kind                                       Variant of GEMM (e.g. universal, gemm, planar_complex, planar_complex_array)
   [int]       --m,--problem-size::m                             M dimension of the GEMM problem space
   [int]       --n,--problem-size::n                             N dimension of the GEMM problem space
   [int]       --k,--problem-size::k                             K dimension of the GEMM problem space
@@ -190,56 +190,63 @@ GEMM
   [tensor]    --C                                               Tensor storing the C operand
   [scalar]    --alpha,--epilogue::alpha                         Epilogue scalar alpha
   [scalar]    --beta,--epilogue::beta                           Epilogue scalar beta
-  [int]       --split_k_slices                                  Number of partitions of K dimension
-  [int]       --batch_count                                     Number of GEMMs computed in one batch
-  [enum]      --op_class,--opcode-class                         Class of math instruction (SIMT or TensorOp).
-  [enum]      --accum,--accumulator-type                        Math instruction accumulator data type.
-  [int]       --cta_m,--threadblock-shape::m                    Threadblock shape in the M dimension.
-  [int]       --cta_n,--threadblock-shape::n                    Threadblock shape in the N dimension.
-  [int]       --cta_k,--threadblock-shape::k                    Threadblock shape in the K dimension.
-  [int]       --stages,--threadblock-stages                     Number of stages of threadblock-scoped matrix multiply.
-  [int]       --warps_m,--warp-count::m                         Number of warps within threadblock along the M dimension.
-  [int]       --warps_n,--warp-count::n                         Number of warps within threadblock along the N dimension.
-  [int]       --warps_k,--warp-count::k                         Number of warps within threadblock along the K dimension.
-  [int]       --inst_m,--instruction-shape::m                   Math instruction shape in the M dimension.
-  [int]       --inst_n,--instruction-shape::n                   Math instruction shape in the N dimension.
-  [int]       --inst_k,--instruction-shape::k                   Math instruction shape in the K dimension.
-  [int]       --min_cc,--minimum-compute-capability             Minimum device compute capability.
-  [int]       --max_cc,--maximum-compute-capability             Maximum device compute capability.
-
+  [enum]      --split_k_mode,--split-k-mode                     Variant of split K mode(serial, parallel)
+  [int]       --split_k_slices,--split-k-slices                 Number of partitions of K dimension
+  [int]       --batch_count,--batch-count                       Number of GEMMs computed in one batch
+  [enum]      --op_class,--opcode-class                         Class of math instruction (simt, tensorop, wmmatensorop, wmma).
+  [enum]      --accum,--accumulator-type                        Math instruction accumulator data type
+  [int]       --cta_m,--threadblock-shape::m                    Threadblock shape in the M dimension
+  [int]       --cta_n,--threadblock-shape::n                    Threadblock shape in the N dimension
+  [int]       --cta_k,--threadblock-shape::k                    Threadblock shape in the K dimension
+  [int]       --cluster_m,--cluster-shape::m                    Cluster shape in the M dimension
+  [int]       --cluster_n,--cluster-shape::n                    Cluster shape in the N dimension
+  [int]       --cluster_k,--cluster-shape::k                    Cluster shape in the K dimension
+  [int]       --stages,--threadblock-stages                     Number of stages of threadblock-scoped matrix multiply
+  [int]       --warps_m,--warp-count::m                         Number of warps within threadblock along the M dimension
+  [int]       --warps_n,--warp-count::n                         Number of warps within threadblock along the N dimension
+  [int]       --warps_k,--warp-count::k                         Number of warps within threadblock along the K dimension
+  [int]       --inst_m,--instruction-shape::m                   Math instruction shape in the M dimension
+  [int]       --inst_n,--instruction-shape::n                   Math instruction shape in the N dimension
+  [int]       --inst_k,--instruction-shape::k                   Math instruction shape in the K dimension
+  [int]       --min_cc,--minimum-compute-capability             Minimum device compute capability
+  [int]       --max_cc,--maximum-compute-capability             Maximum device compute capability
+  [enum]      --raster_order={heuristic|H|along_m|M|along_n|N}  If supported by kernel, sets the tile raster direction
+  [int]       --swizzle_size={1,2,4,8}                          If supported by kernel, sets the 2D tile swizzle extent (In Hopper, other values will be rounded down to the nearest supported value)
 Examples:
 
 Profile a particular problem size:
-  $ ./tools/profiler/cutlass_profiler --operation=Gemm --m=1024 --n=1024 --k=128
+  $ cutlass_profiler --operation=Gemm --m=1024 --n=1024 --k=128
 
 Schmoo over problem size and beta:
-  $ ./tools/profiler/cutlass_profiler --operation=Gemm --m=1024:4096:256 --n=1024:4096:256 --k=128:8192:128 --beta=0,1,2
+  $ cutlass_profiler --operation=Gemm --m=1024:4096:256 --n=1024:4096:256 --k=128:8192:128 --beta=0,1,2.5
 
 Schmoo over accumulator types:
-  $ ./tools/profiler/cutlass_profiler --operation=Gemm --accumulator-type=f16,f32
+  $ cutlass_profiler --operation=Gemm --accumulator-type=f16,f32
 
-Run when A is f16 with column-major and B is any datatype with row-major 
-(For column major, use column, col, or n. For row major use, row or t):
-
-  $ ./tools/profiler/cutlass_profiler --operation=Gemm --A=f16:column --B=*:row
+Run when A is f16 with column-major and B is any datatype with row-major (For column major, use column, col, or n. For row major use, row or t):
+  $ cutlass_profiler --operation=Gemm --A=f16:column --B=*:row
 
 Using various input value distribution:
-  $ ./tools/profiler/cutlass_profiler --operation=Gemm --dist=uniform,min:0,max:3
-  $ ./tools/profiler/cutlass_profiler --operation=Gemm --dist=gaussian,mean:0,stddev:3
-  $ ./tools/profiler/cutlass_profiler --operation=Gemm --dist=sequential,start:0,delta:1
+  $ cutlass_profiler --operation=Gemm --dist=uniform,min:0,max:3
+  $ cutlass_profiler --operation=Gemm --dist=gaussian,mean:0,stddev:3
+  $ cutlass_profiler --operation=Gemm --dist=sequential,start:0,delta:1
 
-Run a kernel with cta tile size of 256x128x32 and save workspace if results are incorrect 
-(note that --cta-tile::k=32 is default cta-tile size):
- $ ./tools/profiler/cutlass_profiler --operation=Gemm --cta_m=256 --cta_n=128  --cta_k=32 --save-workspace=incorrect
+Using CUTLASS 3.x GEMM kernel with a tile scheduler that supports runtime tile remapping and raster mode order:
+  $ cutlass_profiler --operation=Gemm --m=2048 --n=2048 --k=2048 --raster_order=M --swizzle_size=2
+
+Run a kernel with cta tile size of 256x128x32 and save workspace if results are incorrect (note that --cta-tile::k=32 is default cta-tile size):
+ $ cutlass_profiler --operation=Gemm --cta_m=256 --cta_n=128  --cta_k=32 --save-workspace=incorrect
 
 Test your changes to gemm kernels with a quick functional test and save results in functional-test.csv:
- $ ./tools/profiler/cutlass_profiler  --operation=Gemm \
+ $ cutlass_profiler  --operation=Gemm \
    --m=8,56,120,136,256,264,512,520,1024,1032,4096,8192,16384 \
    --n=8,56,120,136,256,264,512,520,1024,1032,4096,8192,16384 \
    --k=8,16,32,64,128,256,288,384,504,512,520 \
    --beta=0,1,2 --profiling-iterations=1 \
-   --output=functional-test.csv
+   --providers=cutlass --output=functional-test.csv
 ```
+
+The format of tensor argument is followed by `<type>:<layout>`. The type could be `f32` as 32-bit floating point, `s8` as 8-bit signed integer, etc. The available types can be referred to the `NumericTypeID_enumerants` in [util.cu](tools/library/src/util.cu). The layout could be `row` or `column`.
 
 ## Example CUDA Core GEMM Operation
 
@@ -342,7 +349,62 @@ To faclitate generation of pivot tables and charts, additional columns may be pr
 $ ./tools/profiler/cutlass_profiler --kernels=cutlass_simt_sgemm_128x128_nn            \
                                     --m=3456 --n=4096 --k=8:4096:8 --output=report.csv \
                                     --tags=cutlass:2.2,date:2020-06-08
-```  
+```
+
+## CUTLASS 3.0 GEMM procedural names
+
+CUTLASS 3.0 introduces a new naming convention for GEMMs used by the profiler targeting the NVIDIA
+Hopper architecture and beyond so as to indicate new features of the kernel within the name
+(e.g., the cluster shape).
+
+To best illustrate this naming convention, we will walk through the meaning of each of the components
+in a GEMM kernel used by the profiler:
+
+```
+cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_f16_f32_128x128x64_2x1x1_0_ntn_align8
+```
+
+The components within this name are as follows:
+
+* `cutlass3x`: indicates that the kernel was generated through the CUTLASS 3.0 API
+* `sm90`: indicates that the kernel targets NVIDIA GPUs with compute capability 90
+* `tensorop`: indicates that the kernel makes use of NVIDIA Tensor Cores
+(as opposed to `simt`, which indicates the use of "CUDA cores")
+* `s`: indicates that the Tensor Core instruction being used accumulates in single precision
+(as opposed to `h`, which indicates half precision)
+* `64x128x16gemm`: indicates that the shape of the Tensor Core instruction being used (MxNxK) is 64x128x16
+* `f16_f16_f32_f16_f16`: indicates that the data types for operands A, B, Accumulator, C and D (in that order).
+* `128x128x64`: indicates that the thread block shape used in the GEMM (MxNxK) is 128x128x64
+* `2x1x1`: indicates that the cluster shape being used is 2x1x1
+* `0`: indicates that the kernel uses the CollectiveBuilder's automatic stage calculation to determine the
+number of pipeline stages in the kernel. Note that `0` does not mean that no stages are used. A nonzero value indicates that automatic stage calculation is not performed and indicates the number of pipeline stages to be used.
+This 0 is only added to the kernel's procedural name, the profiler will still report the actual stage count
+when printing the kernel argument details (`--stages=N`) and kernel discovery will still support filtering through the `--stages` argument.
+* `ntn`: indicates that the layouts for operands A, B, and C are column major ("n"; non-transposed),
+row major ("t"; transposed), and column major, respectively.
+* `align8`: indicates that the maximum alignment between operands A and B is 8.
+
+Note that in some special cases where the input A/B types do not match that of the MMA
+instruction's, the MMA facing input type is added to the instruction string as well.
+
+```
+cutlass3x_sm90_tensorop_s64x128x8tf32gemm_f32_f32_f32_f32_f32_128x128x32_2x1x1_0_tnn_align4
+```
+
+* `s64x128x8tf32gemm`: indicates that the MMA consumes inputs in `tf32` format, and therefore
+the kernel performs rounding of the `f32` values in global memory while loading them into shared memory.
+
+For custom mainloop or epilogue schedules, details of the opted-in schedule are appended to the end of the
+kernel name. For example,
+
+```
+cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_1x1x1_0_nnn_align8_warpspecialized_cooperative_epi_tma
+```
+
+* `warpspecialized_cooperative`: Mainloop employs a persistent warp-specialized mainloop and kernel schedule.
+* `epi_tma`: Kernel epilogue employs TMA based vectorization. 
+* `f16_f16_f16_void_f16`: In this case, C type is set to `void`, indicating that residual matrix support
+is disabled.
 
 # Convolution
 
@@ -377,6 +439,7 @@ Conv2d
   [int]       --s,--filter_s                                    Filter S dimension of the Conv2d problem space
   [int]       --p,--output_p                                    Output P dimension of the Conv2d problem space
   [int]       --q,--output_q                                    Output Q dimension of the Conv2d problem space
+  [int]       --g,--groups                                      Number of convolution groups
   [int]       --pad_h                                           Padding in H direction
   [int]       --pad_w                                           Padding in W direction
   [int]       --stride_h                                        Stride in H direction
@@ -398,6 +461,9 @@ Conv2d
   [int]       --cta_m,--threadblock-shape::m                    Threadblock shape in the M dimension
   [int]       --cta_n,--threadblock-shape::n                    Threadblock shape in the N dimension
   [int]       --cta_k,--threadblock-shape::k                    Threadblock shape in the K dimension
+  [int]       --cluster_m,--cluster-shape::m                    Cluster shape in the M dimension
+  [int]       --cluster_n,--cluster-shape::n                    Cluster shape in the N dimension
+  [int]       --cluster_k,--cluster-shape::k                    Cluster shape in the K dimension
   [int]       --stages,--threadblock-stages                     Number of stages of threadblock-scoped matrix multiply
   [int]       --warps_m,--warp-count::m                         Number of warps within threadblock along the M dimension
   [int]       --warps_n,--warp-count::n                         Number of warps within threadblock along the N dimension
@@ -411,12 +477,7 @@ Conv2d
 Examples:
 
 Profile a particular convolution (specify all the convolution parameters):
-
- $ cutlass_profiler --operation=Conv2d --Activation=f16:nhwc   \
-  --Filter=f16:nhwc --Output=f16 --accumulator-type=f32        \
-  --n=32 --h=14 --w=14 --c=8 --k=64 --r=3 --s=3                \
-  --pad_h=1 --pad_w=1                                          \
-  --stride::h=1 --stride::w=1 --dilation::h=1 --dilation::w=1
+ $ cutlass_profiler --operation=Conv2d --Activation=f16:nhwc --Filter=f16:nhwc --Output=f16 --accumulator-type=f32 --n=32 --h=14 --w=14 --c=8 --k=64 --r=3 --s=3 --pad_h=1 --pad_w=1 --stride_h=1 --stride_w=1 --dilation_h=1 --dilation_w=1
 
 ```
 
@@ -496,7 +557,7 @@ reference_device: Passed
 
 # Copyright
 
-Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 SPDX-License-Identifier: BSD-3-Clause
 
 ```

@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,6 +41,7 @@
 #include "cutlass/matrix_coord.h"
 #include "cutlass/complex.h"
 #include "cutlass/semaphore.h"
+#include "cutlass/gemm/kernel/params_universal_base.h"
 
 #include "cutlass/layout/matrix.h"
 
@@ -104,71 +105,58 @@ public:
   //
 
   /// Argument structure
-  struct Arguments {
-
+  struct Arguments : UniversalArgumentsBase
+  {
     //
     // Data members
     //
 
-    GemmUniversalMode mode;
-    GemmCoord problem_size;
-    int batch_count;
+    typename EpilogueOutputOp::Params epilogue{};
 
-    typename EpilogueOutputOp::Params epilogue;
+    void const * ptr_A{nullptr};
+    void const * ptr_B{nullptr};
+    void const * ptr_var{nullptr};
+    void const * ptr_mean{nullptr};
+    void const * ptr_gamma{nullptr};
+    void const * ptr_beta{nullptr};
+    void const * ptr_C{nullptr};
+    void * ptr_D{nullptr};
 
-    void const * ptr_A;
-    void const * ptr_B;
-    void const * ptr_var;
-    void const * ptr_mean;
-    void const * ptr_gamma;
-    void const * ptr_beta;
-    void const * ptr_C;
-    void * ptr_D;
+    int64_t batch_stride_A{0};
+    int64_t batch_stride_B{0};
+    int64_t batch_stride_var{0};
+    int64_t batch_stride_mean{0};
+    int64_t batch_stride_gamma{0};
+    int64_t batch_stride_beta{0};
+    int64_t batch_stride_C{0};
 
-    int64_t batch_stride_A;
-    int64_t batch_stride_B;
-    int64_t batch_stride_var;
-    int64_t batch_stride_mean;
-    int64_t batch_stride_gamma;
-    int64_t batch_stride_beta;
-    int64_t batch_stride_C;
-    int64_t batch_stride_D;
+    typename LayoutA::Stride stride_a{};
+    typename LayoutB::Stride stride_b{};
+    typename LayoutScaleBias::Stride stride_var{};
+    typename LayoutScaleBias::Stride stride_mean{};
+    typename LayoutScaleBias::Stride stride_gamma{};
+    typename LayoutScaleBias::Stride stride_beta{};
+    typename LayoutC::Stride stride_c{};
+    typename LayoutC::Stride stride_d{};
 
-    typename LayoutA::Stride stride_a;
-    typename LayoutB::Stride stride_b;
-    typename LayoutScaleBias::Stride stride_var;
-    typename LayoutScaleBias::Stride stride_mean;
-    typename LayoutScaleBias::Stride stride_gamma;
-    typename LayoutScaleBias::Stride stride_beta;
-    typename LayoutC::Stride stride_c;
-    typename LayoutC::Stride stride_d;
+    typename LayoutA::Stride::LongIndex lda{};
+    typename LayoutB::Stride::LongIndex ldb{};
+    typename LayoutScaleBias::Stride::LongIndex ld_var{};
+    typename LayoutScaleBias::Stride::LongIndex ld_mean{};
+    typename LayoutScaleBias::Stride::LongIndex ld_gamma{};
+    typename LayoutScaleBias::Stride::LongIndex ld_beta{};
+    typename LayoutC::Stride::LongIndex ldc{};
+    typename LayoutC::Stride::LongIndex ldd{};
 
-    typename LayoutA::Stride::LongIndex lda;
-    typename LayoutB::Stride::LongIndex ldb;
-    typename LayoutScaleBias::Stride::LongIndex ld_var;
-    typename LayoutScaleBias::Stride::LongIndex ld_mean;
-    typename LayoutScaleBias::Stride::LongIndex ld_gamma;
-    typename LayoutScaleBias::Stride::LongIndex ld_beta;
-    typename LayoutC::Stride::LongIndex ldc;
-    typename LayoutC::Stride::LongIndex ldd;
-
-    int const * ptr_gather_A_indices;
-    int const * ptr_gather_B_indices;
-    int const * ptr_scatter_D_indices;
+    int const * ptr_gather_A_indices{nullptr};
+    int const * ptr_gather_B_indices{nullptr};
+    int const * ptr_scatter_D_indices{nullptr};
 
     //
     // Methods
     //
     
-    Arguments(): 
-      mode(GemmUniversalMode::kGemm), 
-      batch_count(1), 
-      ptr_A(nullptr), ptr_B(nullptr), ptr_C(nullptr), ptr_D(nullptr),
-      ptr_var(nullptr), ptr_mean(nullptr),
-      ptr_gamma(nullptr), ptr_beta(nullptr),
-      ptr_gather_A_indices(nullptr),
-      ptr_gather_B_indices(nullptr),
-      ptr_scatter_D_indices(nullptr) {}
+    Arguments() = default;
 
     /// constructs an arguments structure
     Arguments(
@@ -202,31 +190,27 @@ public:
       typename LayoutC::Stride stride_d,
       int const *ptr_gather_A_indices = nullptr,
       int const *ptr_gather_B_indices = nullptr,
-      int const *ptr_scatter_D_indices = nullptr
-    ):
-      mode(mode), 
-      problem_size(problem_size), 
-      batch_count(batch_count),
+      int const *ptr_scatter_D_indices = nullptr)
+    :
+      UniversalArgumentsBase(mode, problem_size, batch_count, batch_stride_D),
       epilogue(epilogue), 
       ptr_A(ptr_A), ptr_B(ptr_B), ptr_C(ptr_C), ptr_D(ptr_D),
       ptr_var(ptr_var), ptr_mean(ptr_mean), 
       ptr_gamma(ptr_gamma), ptr_beta(ptr_beta), 
-      batch_stride_A(batch_stride_A), batch_stride_B(batch_stride_B), batch_stride_C(batch_stride_C), batch_stride_D(batch_stride_D), 
+      batch_stride_A(batch_stride_A), batch_stride_B(batch_stride_B), batch_stride_C(batch_stride_C),
+      batch_stride_var(batch_stride_var), batch_stride_mean(batch_stride_mean),
+      batch_stride_gamma(batch_stride_gamma), batch_stride_beta(batch_stride_beta),
+      lda(0), ldb(0), ldc(0), ldd(0),
+      ld_var(0), ld_mean(0),
+      ld_gamma(0), ld_beta(0),
       stride_a(stride_a), stride_b(stride_b), stride_c(stride_c), stride_d(stride_d),
       stride_var(stride_var), stride_mean(stride_mean),
       stride_gamma(stride_gamma), stride_beta(stride_beta),
       ptr_gather_A_indices(ptr_gather_A_indices), ptr_gather_B_indices(ptr_gather_B_indices),
-      ptr_scatter_D_indices(ptr_scatter_D_indices) {
-      lda = 0;
-      ldb = 0;
-      ldc = 0;
-      ldd = 0;
-      ld_var = 0;
-      ld_mean = 0;
-      ld_gamma = 0;
-      ld_beta = 0;
+      ptr_scatter_D_indices(ptr_scatter_D_indices)
+    {
       CUTLASS_TRACE_HOST("GemmUniversal::Arguments::Arguments() - problem_size: " << problem_size);
-      }
+    }
 
     /// constructs an arguments structure
     Arguments(
@@ -260,23 +244,22 @@ public:
       typename LayoutC::Stride::LongIndex ldd,
       int const *ptr_gather_A_indices = nullptr,
       int const *ptr_gather_B_indices = nullptr,
-      int const *ptr_scatter_D_indices = nullptr
-    ):
-      mode(mode), 
-      problem_size(problem_size), 
-      batch_count(batch_count),
+      int const *ptr_scatter_D_indices = nullptr)
+    :
+      UniversalArgumentsBase(mode, problem_size, batch_count, batch_stride_D),
       epilogue(epilogue), 
       ptr_A(ptr_A), ptr_B(ptr_B), ptr_C(ptr_C), ptr_D(ptr_D),
       ptr_var(ptr_var), ptr_mean(ptr_mean), 
       ptr_gamma(ptr_gamma), ptr_beta(ptr_beta), 
-      batch_stride_A(batch_stride_A), batch_stride_B(batch_stride_B), batch_stride_C(batch_stride_C), batch_stride_D(batch_stride_D),
+      batch_stride_A(batch_stride_A), batch_stride_B(batch_stride_B), batch_stride_C(batch_stride_C),
       batch_stride_var(batch_stride_var), batch_stride_mean(batch_stride_mean),
       batch_stride_gamma(batch_stride_gamma), batch_stride_beta(batch_stride_beta),
       lda(lda), ldb(ldb), ldc(ldc), ldd(ldd),
       ld_var(ld_var), ld_mean(ld_mean),
       ld_gamma(ld_gamma), ld_beta(ld_beta),
       ptr_gather_A_indices(ptr_gather_A_indices), ptr_gather_B_indices(ptr_gather_B_indices),
-      ptr_scatter_D_indices(ptr_scatter_D_indices) {
+      ptr_scatter_D_indices(ptr_scatter_D_indices)
+    {
       stride_a = make_Coord(lda);
       stride_b = make_Coord(ldb);
       stride_c = make_Coord(ldc);
@@ -286,7 +269,7 @@ public:
       stride_gamma = make_Coord(ld_gamma);
       stride_beta = make_Coord(ld_beta);
       CUTLASS_TRACE_HOST("GemmUniversal::Arguments::Arguments() - problem_size: " << problem_size);
-      }
+    }
 
     /// Returns arguments for the transposed problem
     Arguments transposed_problem() const {
@@ -303,27 +286,40 @@ public:
     }
   };
 
+
   //
   // Structure for precomputing values in host memory and passing to kernels
   //
 
   /// Parameters structure
-  struct Params {
+  struct Params : UniversalParamsBase<
+    ThreadblockSwizzle,
+    ThreadblockShape,
+    ElementA,
+    ElementB,
+    ElementC,
+    LayoutA,
+    LayoutB>
+  {
+    using ParamsBase = UniversalParamsBase<
+      ThreadblockSwizzle,
+      ThreadblockShape,
+      ElementA,
+      ElementB,
+      ElementC,
+      LayoutA,
+      LayoutB>;
 
-    cutlass::gemm::GemmCoord problem_size;
-    cutlass::gemm::GemmCoord grid_tiled_shape;
-    int swizzle_log_tile;
-    
+    //
+    // Data members
+    //
+
     typename Mma::IteratorA::Params params_A;
     typename Mma::IteratorB::Params params_B;
     typename Epilogue::OutputTileIterator::Params params_C;
     typename Epilogue::OutputTileIterator::Params params_D;
     
     typename EpilogueOutputOp::Params output_op;
-
-    GemmUniversalMode mode;
-    int batch_count;
-    int gemm_k_size;
 
     void * ptr_A;
     void * ptr_B;
@@ -341,65 +337,30 @@ public:
     int64_t batch_stride_gamma;
     int64_t batch_stride_beta;
     int64_t batch_stride_C;
-    int64_t batch_stride_D;
 
     int * ptr_gather_A_indices;
     int * ptr_gather_B_indices;
     int * ptr_scatter_D_indices;
 
-    int *semaphore;
-
     //
-    // Methods
+    // Host dispatch API
     //
 
-    CUTLASS_HOST_DEVICE
-    Params():
-      swizzle_log_tile(0),
-      params_A(0),
-      params_B(0),
-      params_C(0),
-      params_D(0),
-      batch_count(0),
-      gemm_k_size(0),
-      mode(cutlass::gemm::GemmUniversalMode::kGemm),
-      ptr_A(nullptr),
-      ptr_B(nullptr),
-      ptr_var(nullptr),
-      ptr_mean(nullptr),
-      ptr_gamma(nullptr),
-      ptr_beta(nullptr),
-      ptr_C(nullptr),
-      ptr_D(nullptr),
-      batch_stride_A(0),
-      batch_stride_B(0),
-      batch_stride_var(0),
-      batch_stride_mean(0),
-      batch_stride_C(0),
-      batch_stride_D(0),
-      ptr_gather_A_indices(nullptr),
-      ptr_gather_B_indices(nullptr),
-      ptr_scatter_D_indices(nullptr),
-      semaphore(nullptr) { }
+    /// Default constructor
+    Params() = default;
 
-    CUTLASS_HOST_DEVICE
+    /// Constructor
     Params(
-      Arguments const &args,
-      cutlass::gemm::GemmCoord const & grid_tiled_shape,
-      int gemm_k_size,
-      void *workspace = nullptr
-    ):
-      problem_size(args.problem_size),
-      grid_tiled_shape(grid_tiled_shape),
-      swizzle_log_tile(ThreadblockSwizzle().get_log_tile(grid_tiled_shape)),
+      Arguments const &args,  /// GEMM application arguments
+      int device_sms,         /// Number of SMs on the device
+      int sm_occupancy)       /// Kernel SM occupancy (in thread blocks)
+    :
+      ParamsBase(args, device_sms, sm_occupancy),
       params_A(args.lda ? make_Coord_with_padding<LayoutA::kStrideRank>(args.lda) : args.stride_a),
       params_B(args.ldb ? make_Coord_with_padding<LayoutB::kStrideRank>(args.ldb) : args.stride_b),
       params_C(args.ldc ? make_Coord_with_padding<LayoutC::kStrideRank>(args.ldc) : args.stride_c),
       params_D(args.ldd ? make_Coord_with_padding<LayoutC::kStrideRank>(args.ldd) : args.stride_d),
       output_op(args.epilogue),
-      mode(args.mode),
-      batch_count(args.batch_count),
-      gemm_k_size(gemm_k_size),
       ptr_A(const_cast<void *>(args.ptr_A)),
       ptr_B(const_cast<void *>(args.ptr_B)),
       ptr_var(const_cast<void *>(args.ptr_var)),
@@ -415,19 +376,14 @@ public:
       batch_stride_gamma(args.batch_stride_gamma),
       batch_stride_beta(args.batch_stride_beta),
       batch_stride_C(args.batch_stride_C),
-      batch_stride_D(args.batch_stride_D),
       ptr_gather_A_indices(const_cast<int *>(args.ptr_gather_A_indices)),
       ptr_gather_B_indices(const_cast<int *>(args.ptr_gather_B_indices)),
-      ptr_scatter_D_indices(const_cast<int *>(args.ptr_scatter_D_indices)),
-      semaphore(static_cast<int *>(workspace)) {
+      ptr_scatter_D_indices(const_cast<int *>(args.ptr_scatter_D_indices))
+    {}
 
-    }
-
-    CUTLASS_HOST_DEVICE
-    void update(
-      Arguments const &args,
-      void *workspace = nullptr) {
-
+    /// Lightweight update given a subset of arguments.
+    void update(Arguments const &args)
+    {
       ptr_A = const_cast<void *>(args.ptr_A);
       ptr_B = const_cast<void *>(args.ptr_B);
       ptr_var = const_cast<void *>(args.ptr_var);
@@ -437,25 +393,25 @@ public:
       ptr_C = const_cast<void *>(args.ptr_C);
       ptr_D = args.ptr_D;
 
-      ptr_gather_A_indices = const_cast<int *>(args.ptr_gather_A_indices);
-      ptr_gather_B_indices = const_cast<int *>(args.ptr_gather_B_indices);
-      ptr_scatter_D_indices = const_cast<int *>(args.ptr_scatter_D_indices);
-
       batch_stride_A = args.batch_stride_A;
       batch_stride_B = args.batch_stride_B;
+      batch_stride_C = args.batch_stride_C;
       batch_stride_var = args.batch_stride_var;
       batch_stride_mean = args.batch_stride_mean;
       batch_stride_gamma = args.batch_stride_gamma;
       batch_stride_beta = args.batch_stride_beta;
-      batch_stride_C = args.batch_stride_C;
-      batch_stride_D = args.batch_stride_D;
+      this->batch_stride_D = args.batch_stride_D;
+
+      ptr_gather_A_indices = const_cast<int *>(args.ptr_gather_A_indices);
+      ptr_gather_B_indices = const_cast<int *>(args.ptr_gather_B_indices);
+      ptr_scatter_D_indices = const_cast<int *>(args.ptr_scatter_D_indices);
 
       output_op = args.epilogue;
       
-      semaphore = static_cast<int *>(workspace);
       CUTLASS_TRACE_HOST("GemmUniversal::Params::update()");
     }
   };
+
 
   /// Shared memory storage structure
   union SharedStorage {
@@ -466,11 +422,8 @@ public:
 public:
 
   //
-  // Methods
+  // Host dispatch API
   //
-
-  CUTLASS_DEVICE
-  GemmLayernormMainloopFusion() { } 
 
   /// Determines whether kernel satisfies alignment
   static Status can_implement(
@@ -555,12 +508,23 @@ public:
     return can_implement(args.problem_size);
   }
 
-  static size_t get_extra_workspace_size(Arguments const &args,
-                                         cutlass::gemm::GemmCoord const &grid_tiled_shape) {
+public:
 
-    return 0;
+  //
+  // Device-only API
+  //
+
+  // Factory invocation
+  CUTLASS_DEVICE
+  static void invoke(
+    Params const &params,
+    SharedStorage &shared_storage)
+  {
+    GemmLayernormMainloopFusion op;
+    op(params, shared_storage);
   }
  
+
   /// Executes one GEMM
   CUTLASS_DEVICE
   void operator()(Params const &params, SharedStorage &shared_storage) {

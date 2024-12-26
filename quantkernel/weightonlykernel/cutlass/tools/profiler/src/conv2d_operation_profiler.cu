@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,9 +39,8 @@
 
 #include "cutlass/core_io.h"
 
-#include "conv2d_operation_profiler.h"
-#include "gpu_timer.h"
-
+#include "cutlass/profiler/conv2d_operation_profiler.h"
+#include "cutlass/profiler/gpu_timer.h"
 /////////////////////////////////////////////////////////////////////////////////////////////////
 using namespace cutlass::library;
 
@@ -67,6 +66,7 @@ Conv2dOperationProfiler::Conv2dOperationProfiler(Options const &options):
       {ArgumentTypeID::kInteger, {"s", "filter_s"}, "Filter S dimension of the Conv2d problem space"},
       {ArgumentTypeID::kInteger, {"p", "output_p"}, "Output P dimension of the Conv2d problem space"},
       {ArgumentTypeID::kInteger, {"q", "output_q"}, "Output Q dimension of the Conv2d problem space"},
+      {ArgumentTypeID::kInteger, {"g", "groups"}, "Number of convolution groups"},
       {ArgumentTypeID::kInteger, {"pad_h"}, "Padding in H direction"},
       {ArgumentTypeID::kInteger, {"pad_w"}, "Padding in W direction"},
       {ArgumentTypeID::kInteger, {"stride_h"}, "Stride in H direction"},
@@ -233,6 +233,11 @@ Status Conv2dOperationProfiler::initialize_configuration(
     problem_.s = 3;
   }
 
+  if (!arg_as_int(problem_.groups, "g", problem_space, problem)) {
+    // default value
+    problem_.groups = 1;
+  }
+
   if (!arg_as_int(problem_.pad_h, "pad_h", problem_space, problem)) {
     // default value
     problem_.pad_h = 1;
@@ -264,7 +269,7 @@ Status Conv2dOperationProfiler::initialize_configuration(
   }
 
   ////////////////////////  Convolution output dimensions p and q ////////////////////////
-  // Cutlass convolutions support arbitrary output sizes and not constriant by          //
+  // Cutlass convolutions support arbitrary output sizes and not constrained by         //
   // input, filter, padding, striding, dilation sizes.                                  //
   // cuDNN sets the output dimensions (p, q)  using following equations:                //
   //                                                                                    //
@@ -382,7 +387,7 @@ Status Conv2dOperationProfiler::initialize_configuration(
                                                 int(problem_.dilation_w),
                                                 static_cast<conv::Mode>(static_cast<int>(problem_.conv_mode)),
                                                 int(problem_.split_k_slices),
-                                                1 // groups
+                                                int(problem_.groups)
                                               );
   
   conv_workspace_.configuration.split_k_mode = static_cast<conv::SplitKMode>(static_cast<int>(problem_.split_k_mode));
@@ -454,6 +459,8 @@ void Conv2dOperationProfiler::initialize_result_(
   set_argument(result, "p", problem_space, problem_.p);
   set_argument(result, "q", problem_space, problem_.q);
 
+  set_argument(result, "g", problem_space, problem_.groups);
+
   set_argument(result, "pad_h", problem_space, problem_.pad_h);
   set_argument(result, "pad_w", problem_space, problem_.pad_w);
 
@@ -494,7 +501,7 @@ void Conv2dOperationProfiler::initialize_result_(
   // Bytes of activation, filter, and output tensors
   result.bytes = problem_.bytes(operation_desc);
 
-  // Theoritical flops required for the computation
+  // Theoretical flops required for the computation
   result.flops = problem_.flops(operation_desc);
 
   // Measured runtime
@@ -502,7 +509,7 @@ void Conv2dOperationProfiler::initialize_result_(
 
 }
 
-/// Initialize reduction problem dimenstions and library::Operation
+/// Initialize reduction problem dimensions and library::Operation
 bool Conv2dOperationProfiler::initialize_reduction_configuration_(
   Options const &options,  
   PerformanceReport &report,
@@ -527,7 +534,7 @@ bool Conv2dOperationProfiler::initialize_reduction_configuration_(
   /// This chooses the appropriate stride element of the row-major C tensor.
   int const & tensor_c_stride_idx = (conv_kind == library::ConvKind::kWgrad ? 2 : 0);
 
-  /// intialize library::ReductionConfiguration
+  /// initialize library::ReductionConfiguration
   conv_workspace_.reduction_configuration.problem_size     = problem_.eq_gemm_size(conv_kind).mn();
   conv_workspace_.reduction_configuration.partitions       = int(problem_.split_k_slices);
   conv_workspace_.reduction_configuration.partition_stride = problem_.eq_gemm_size(conv_kind).mn().product();
@@ -603,7 +610,7 @@ Status Conv2dOperationProfiler::initialize_workspace(
 
 
   if (options.execution_mode != ExecutionMode::kDryRun) {
-
+    int seed_shift = 0;
     conv_workspace_.A = device_context.allocate_tensor(
       options,
       "A",
@@ -611,7 +618,8 @@ Status Conv2dOperationProfiler::initialize_workspace(
       operation_desc.A.layout,
       problem_.extent_a(operation_desc.conv_kind),
       conv_workspace_.configuration.stride_a,
-      conv_workspace_.problem_count
+      conv_workspace_.problem_count,
+      seed_shift++
     );
 
     conv_workspace_.B = device_context.allocate_tensor(
@@ -621,8 +629,23 @@ Status Conv2dOperationProfiler::initialize_workspace(
       operation_desc.B.layout,
       problem_.extent_b(operation_desc.conv_kind),
       conv_workspace_.configuration.stride_b,
-      conv_workspace_.problem_count
+      conv_workspace_.problem_count,
+      seed_shift++
     );
+
+    if(problem_.groups == problem_.c && problem_.groups == problem_.k){
+      // Depthwise direct conv kernel needs reorder the filter.
+      conv_workspace_.reordered_B = device_context.allocate_tensor(
+        options,
+        "B",
+        operation_desc.B.element,
+        operation_desc.B.layout,
+        problem_.extent_b(operation_desc.conv_kind),
+        conv_workspace_.configuration.stride_b,
+        conv_workspace_.problem_count,
+        seed_shift++
+      );
+    }
 
     conv_workspace_.C = device_context.allocate_tensor(
       options,
@@ -631,7 +654,8 @@ Status Conv2dOperationProfiler::initialize_workspace(
       operation_desc.C.layout,
       problem_.extent_c(operation_desc.conv_kind),
       conv_workspace_.configuration.stride_c,
-      conv_workspace_.problem_count
+      conv_workspace_.problem_count,
+      seed_shift++
     );
 
     conv_workspace_.Computed = device_context.allocate_tensor(
@@ -738,6 +762,12 @@ bool Conv2dOperationProfiler::verify_cutlass(
   conv_workspace_.arguments.beta = problem_.beta.data();
   conv_workspace_.arguments.pointer_mode = library::ScalarPointerMode::kHost;
 
+  if (conv_workspace_.reordered_B != nullptr){
+    conv_workspace_.arguments.reordered_B = conv_workspace_.reordered_B->data();
+  }else{
+    conv_workspace_.arguments.reordered_B = nullptr;
+  }
+
   conv_workspace_.Computed->copy_from_device(conv_workspace_.C->data());
   
   if (conv_workspace_.configuration.split_k_mode == conv::SplitKMode::kParallel) {
@@ -746,7 +776,7 @@ bool Conv2dOperationProfiler::verify_cutlass(
     conv_workspace_.arguments.alpha = problem_.alpha_one.data();
     conv_workspace_.arguments.beta = problem_.beta_zero.data();
 
-    /// intialize library::ReductionArguments
+    /// initialize library::ReductionArguments
     conv_workspace_.reduction_arguments.workspace           = conv_workspace_.device_workspace.data();
     conv_workspace_.reduction_arguments.source              = conv_workspace_.C->data();
     conv_workspace_.reduction_arguments.destination         = conv_workspace_.Computed->data();
@@ -934,7 +964,7 @@ bool Conv2dOperationProfiler::verify_with_host_reference_(
       conv_desc.tile_description.math_instruction.element_accumulator, 
       conv_desc.element_epilogue);
 
-#if 0 // debug print to check which host refererence instance is selected
+#if 0 // debug print to check which host reference instance is selected
     std::cout << conv2d_key << "\n";
 #endif
 
@@ -955,7 +985,7 @@ bool Conv2dOperationProfiler::verify_with_host_reference_(
       return true;
     }
 
-    // host refernce has only one instances in Conv2dOperationVectorMap
+    // host reference has only one instances in Conv2dOperationVectorMap
     library::Operation const *reference_op = cc_it->second[0];
 
     //
@@ -982,7 +1012,7 @@ bool Conv2dOperationProfiler::verify_with_host_reference_(
     conv_workspace_.arguments.pointer_mode = library::ScalarPointerMode::kHost;
 
     //
-    // Intialize host reference operation
+    // Initialize host reference operation
     //
     std::vector<uint8_t> host_workspace_reference_op;
 
@@ -1087,11 +1117,11 @@ bool Conv2dOperationProfiler::verify_with_device_reference_(
       return true;
     }
 
-    // device refernce has only one instances in Conv2dOperationVectorMap
+    // device reference has only one instances in Conv2dOperationVectorMap
     library::Operation const *reference_op = cc_it->second[0];
   
     //
-    // Intialize device reference operation
+    // Initialize device reference operation
     //
     std::vector<uint8_t> host_workspace_reference_op;
 
@@ -1178,7 +1208,7 @@ bool Conv2dOperationProfiler::profile(
       conv_workspace_.arguments.alpha = problem_.alpha_one.data();
       conv_workspace_.arguments.beta = problem_.beta_zero.data();
 
-      /// intialize library::ReductionArguments
+      /// initialize library::ReductionArguments
       conv_workspace_.reduction_arguments.workspace           = conv_workspace_.device_workspace.data();
       conv_workspace_.reduction_arguments.source              = conv_workspace_.C->data();
       conv_workspace_.reduction_arguments.destination         = conv_workspace_.Computed->data();
@@ -1249,7 +1279,7 @@ Status Conv2dOperationProfiler::profile_cutlass_(
       // update library::ConvArguments for parallel split-k reduction
       conv_arguments->D = conv_workspace_.device_workspace.data();
 
-      /// intialize library::ReductionArguments
+      /// initialize library::ReductionArguments
       conv_workspace_.reduction_arguments.workspace           = conv_workspace_.device_workspace.data();
       conv_workspace_.reduction_arguments.source              = conv_workspace_.C->batch_data(problem_idx);
       conv_workspace_.reduction_arguments.destination         = conv_workspace_.Computed->batch_data(problem_idx);
@@ -1302,7 +1332,7 @@ Status Conv2dOperationProfiler::profile_cutlass_(
       // update library::ConvArguments for parallel split-k reduction
       conv_arguments->D = conv_workspace_.device_workspace.data();
 
-      /// intialize library::ReductionArguments
+      /// initialize library::ReductionArguments
       conv_workspace_.reduction_arguments.workspace           = conv_workspace_.device_workspace.data();
       conv_workspace_.reduction_arguments.source              = conv_workspace_.C->batch_data(problem_idx);
       conv_workspace_.reduction_arguments.destination         = conv_workspace_.Computed->batch_data(problem_idx);

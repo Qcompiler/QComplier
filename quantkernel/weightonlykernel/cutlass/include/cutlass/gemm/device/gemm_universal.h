@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -34,6 +34,7 @@
 
 #pragma once
 
+#include "cutlass/arch/mma.h"
 #include "cutlass/cutlass.h"
 #include "cutlass/numeric_types.h"
 #include "cutlass/arch/arch.h"
@@ -58,6 +59,11 @@ namespace device {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 /*! 
+  GemmUniversal is a stateful, reusable GEMM handle.  Once initialized for a given GEMM computation
+  (problem geometry and data references), it can be reused across different GEMM problems having the
+  geometry.  (Once initialized, details regarding problem geometry and references to workspace memory
+  cannot be updated.)
+
   The universal GEMM accommodates serial reductions, parallel reductions, batched strided, and 
   batched array variants.
 */
@@ -127,7 +133,11 @@ template <
     /// Scatter result D by using an index array
     bool ScatterD = false,
     /// Permute result D
-    typename PermuteDLayout = layout::NoPermute
+    typename PermuteDLayout_ = layout::NoPermute,
+    /// Permute operand A
+    typename PermuteALayout_ = layout::NoPermute,
+    /// Permute operand B
+    typename PermuteBLayout_ = layout::NoPermute
 >
 class GemmUniversal : 
   public GemmUniversalBase<
@@ -156,7 +166,9 @@ class GemmUniversal :
       GatherA,
       GatherB,
       ScatterD,
-      PermuteDLayout
+      PermuteDLayout_,
+      PermuteALayout_,
+      PermuteBLayout_
     >::GemmKernel
   > {
 
@@ -171,6 +183,9 @@ class GemmUniversal :
   using EpilogueOutputOp = EpilogueOutputOp_;
   using ThreadblockSwizzle = ThreadblockSwizzle_;
   using Operator = Operator_;
+  using PermuteDLayout = PermuteDLayout_;
+  using PermuteALayout = PermuteALayout_;
+  using PermuteBLayout = PermuteBLayout_;
   static int const kStages = Stages;
   static int const kAlignmentA = AlignmentA;
   static int const kAlignmentB = AlignmentB;
@@ -204,7 +219,9 @@ class GemmUniversal :
       GatherA,
       GatherB,
       ScatterD,
-      PermuteDLayout
+      PermuteDLayout_,
+      PermuteALayout_,
+      PermuteBLayout_
     >::GemmKernel
   >;
 
@@ -214,7 +231,7 @@ class GemmUniversal :
 
 ////////////////////////////////////////////////////////////////////////////////
 
-/// Parital specialization for column-major output exchanges problem size and operand.
+/// Partial specialization for column-major output exchanges problem size and operand.
 template <
     /// Element type for A matrix operand
     typename ElementA_,
@@ -263,14 +280,19 @@ template <
     /// Scatter result D by using an index array
     bool ScatterD,
     /// Permute result D
-    typename PermuteDLayout
+    typename PermuteDLayout_,
+    /// Permute operand A
+    typename PermuteALayout_,
+    /// Permute operand B
+    typename PermuteBLayout_
 >
 class GemmUniversal<ElementA_, LayoutA_, ElementB_, LayoutB_, ElementC_,
            layout::ColumnMajor,  // partially specialized on LayoutC
            ElementAccumulator_, OperatorClass_, ArchTag_, ThreadblockShape_,
            WarpShape_, InstructionShape_, EpilogueOutputOp_,
            ThreadblockSwizzle_, Stages, AlignmentA, AlignmentB,
-           Operator_, TransformA, TransformB, GatherA, GatherB, ScatterD, PermuteDLayout> {
+           Operator_, TransformA, TransformB, GatherA, GatherB, ScatterD,
+           PermuteDLayout_, PermuteALayout_, PermuteBLayout_> {
  public:
 
   using ElementA = ElementA_;
@@ -292,6 +314,9 @@ class GemmUniversal<ElementA_, LayoutA_, ElementB_, LayoutB_, ElementC_,
   using EpilogueOutputOp = EpilogueOutputOp_;
   using ThreadblockSwizzle = ThreadblockSwizzle_;
   using Operator = Operator_;
+  using PermuteDLayout = PermuteDLayout_;
+  using PermuteALayout = PermuteALayout_;
+  using PermuteBLayout = PermuteBLayout_;
   static int const kStages = Stages;
   static int const kAlignmentA = AlignmentA;
   static int const kAlignmentB = AlignmentB;
@@ -322,7 +347,9 @@ class GemmUniversal<ElementA_, LayoutA_, ElementB_, LayoutB_, ElementC_,
     GatherB,
     GatherA,
     ScatterD,
-    PermuteDLayout
+    PermuteDLayout,
+    PermuteBLayout,
+    PermuteALayout
   >::Base;
 
   using GemmKernel = typename UnderlyingOperator::GemmKernel;

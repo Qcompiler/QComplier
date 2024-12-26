@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -217,11 +217,25 @@ struct Testbed {
     matrix_C_reference.reset(cutlass::make_Coord(m, n), false);
   }
 
+  bool sufficient() {
+    return true;
+  }
+
   /// Runs the test
   bool run(
       dim3 grid, dim3 block,
       cutlass::Distribution::Kind init_A = cutlass::Distribution::Uniform,
       cutlass::Distribution::Kind init_B = cutlass::Distribution::Uniform) {
+
+    // Waive test if insufficient CUDA device
+    if (!sufficient()) {
+      if (CUTLASS_TEST_UNIT_ENABLE_WARNINGS) {
+        std::cerr << "Test waived due to insufficient CUDA device." << std::endl;
+      }
+      return true;
+    }
+
+
     //
     // initialize device memory
     //
@@ -248,7 +262,6 @@ struct Testbed {
     } else if (init_A == cutlass::Distribution::Identity) {
       cutlass::reference::host::TensorFillIdentity(matrix_A.host_view());
     } else {
-      // TODO: Implement the rest
       return false;
     }
 
@@ -274,7 +287,6 @@ struct Testbed {
     } else if (init_B == cutlass::Distribution::Identity) {
       cutlass::reference::host::TensorFillIdentity(matrix_B.host_view());
     } else {
-      // TODO: Implement the rest
       return false;
     }
 
@@ -300,7 +312,7 @@ struct Testbed {
 
     cudaError_t result = cudaDeviceSynchronize();
     EXPECT_EQ(result, cudaSuccess)
-        << " kernel error: " << cudaGetErrorString(result);
+        << " kernel error: " << cudaGetErrorString(result) << " on device " << GetCudaDevice();
 
     matrix_C_computed.sync_host();
 
@@ -316,7 +328,7 @@ struct Testbed {
     bool passed = cutlass::reference::host::TensorEquals(
         matrix_C_computed.host_view(), matrix_C_reference.host_view());
 
-    EXPECT_TRUE(passed);
+    EXPECT_TRUE(passed) << "Failed on device " << GetCudaDevice();
 
     if (!passed) {
       std::ofstream output("mma_pipelined_testbed_errors.txt");

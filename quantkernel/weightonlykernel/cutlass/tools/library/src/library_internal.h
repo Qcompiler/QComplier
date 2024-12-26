@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -64,6 +64,10 @@ namespace library {
 
 template <typename T> struct NumericTypeMap;
 
+template <> struct NumericTypeMap<void> {
+  static NumericTypeID const kId = NumericTypeID::kVoid;
+};
+
 template <> struct NumericTypeMap<cutlass::uint1b_t> {
   static NumericTypeID const kId = NumericTypeID::kB1;
 };
@@ -94,6 +98,14 @@ template <> struct NumericTypeMap<cutlass::uint4b_t> {
 
 template <> struct NumericTypeMap<uint8_t> {
   static NumericTypeID const kId = NumericTypeID::kU8;
+};
+
+template <> struct NumericTypeMap<cutlass::float_e4m3_t> {
+  static NumericTypeID const kId = NumericTypeID::kFE4M3;
+};
+
+template <> struct NumericTypeMap<cutlass::float_e5m2_t> {
+  static NumericTypeID const kId = NumericTypeID::kFE5M2;
 };
 
 template <> struct NumericTypeMap<uint16_t> {
@@ -140,6 +152,7 @@ template <> struct NumericTypeMap<cutlass::tfloat32_t> {
   static NumericTypeID const kId = NumericTypeID::kTF32;
 };
 
+
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 template <typename T> struct MathOperationMap {
@@ -160,6 +173,10 @@ template <> struct MathOperationMap<cutlass::arch::OpMultiplyAddFastF16> {
 
 template <> struct MathOperationMap<cutlass::arch::OpMultiplyAddSaturate> {
   static MathOperationID const kId = MathOperationID::kMultiplyAddSaturate;
+};
+
+template <> struct MathOperationMap<cutlass::arch::OpMultiplyAddMixedInputUpcast> {
+  static MathOperationID const kId = MathOperationID::kMultiplyAddMixedInputUpcast;
 };
 
 template <> struct MathOperationMap<cutlass::arch::OpMultiplyAddComplex> {
@@ -269,6 +286,10 @@ template <> struct OpcodeClassMap<arch::OpClassSimt> {
 
 template <> struct OpcodeClassMap<arch::OpClassTensorOp> {
   static OpcodeClassID const kId = OpcodeClassID::kTensorOp;
+};
+
+template <> struct OpcodeClassMap<arch::OpClassSparseTensorOp> {
+  static OpcodeClassID const kId = OpcodeClassID::kSparseTensorOp;
 };
 
 template <> struct OpcodeClassMap<arch::OpClassWmmaTensorOp> {

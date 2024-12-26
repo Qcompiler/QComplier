@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -578,9 +578,21 @@ public:
 
     int gemm_smem_size = int(sizeof(typename GemmKernel::SharedStorage));
 
+    cudaError_t result;
+
+    if (gemm_smem_size >= (48 << 10)) {
+      result = cudaFuncSetAttribute(cutlass::Kernel<GemmKernel>,
+                                    cudaFuncAttributeMaxDynamicSharedMemorySize,
+                                    gemm_smem_size);
+
+      if (result != cudaSuccess) {
+        return Status::kErrorInternal;
+      }
+    }
+
     cutlass::Kernel<GemmKernel><<<gemm_grid, gemm_block, gemm_smem_size, stream>>>(params_.gemm);
 
-    cudaError_t result = cudaGetLastError();
+    result = cudaGetLastError();
 
     if (result != cudaSuccess) {
       return cutlass::Status::kErrorInternal;

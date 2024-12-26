@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -80,9 +80,9 @@ public:
   typedef value_type *pointer;
   typedef value_type const * const_pointer;
 
-  using ArrayType = Array<T, N>;
-  using reference = typename ArrayType::reference;
-  using const_reference = typename ArrayType::const_reference;
+  using Array = Array<T, N>;
+  using reference = typename Array::reference;
+  using const_reference = typename Array::const_reference;
 
 public:
 

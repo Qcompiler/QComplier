@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -47,7 +47,7 @@
   or utilities within CUTLASS. Such utilities are demonstrated elsewhere in other examples and are
   prevalent in the CUTLASS unit tests.
 
-  This example has delibrately been kept similar to the basic_gemm example from cutass-1.3 to 
+  This example has delibrately been kept similar to the basic_gemm example from cutlass-1.3 to
   highlight the minimum amount of differences needed to transition to cutlass-2.0.
 
   Cutlass-1.3 sgemm: https://github.com/NVIDIA/cutlass/blob/master/examples/00_basic_gemm/basic_gemm.cu

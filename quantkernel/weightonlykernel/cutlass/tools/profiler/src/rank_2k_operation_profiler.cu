@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,9 +41,9 @@
 
 #include "cutlass/core_io.h"
 
-#include "cublas_helpers.h"
-#include "rank_2k_operation_profiler.h"
-#include "gpu_timer.h"
+#include "cutlass/profiler/cublas_helpers.h"
+#include "cutlass/profiler/rank_2k_operation_profiler.h"
+#include "cutlass/profiler/gpu_timer.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -391,14 +391,16 @@ Status Rank2KOperationProfiler::initialize_workspace(
     static_cast<library::RankKDescription const &>(operation->description());
 
   if (options.execution_mode != ExecutionMode::kDryRun) {
-
+    int seed_shift = 0;
     rank_k_workspace_.A = device_context.allocate_tensor(
       options,
       "A",
       operation_desc.A.element,
       operation_desc.A.layout,
       {int(problem_.n), int(problem_.k)},
-      {int(problem_.lda)}
+      {int(problem_.lda)},
+      1, // batch_count
+      seed_shift++
     );
 
     rank_k_workspace_.B = device_context.allocate_tensor(
@@ -407,7 +409,9 @@ Status Rank2KOperationProfiler::initialize_workspace(
       operation_desc.B.element,
       operation_desc.B.layout,
       {int(problem_.n), int(problem_.k)},
-      {int(problem_.ldb)}
+      {int(problem_.ldb)},
+      1, // batch_count
+      seed_shift++
     );
 
     rank_k_workspace_.C = device_context.allocate_tensor(
@@ -417,7 +421,8 @@ Status Rank2KOperationProfiler::initialize_workspace(
       operation_desc.C.layout,
       {int(problem_.n), int(problem_.n)},
       {int(problem_.ldc)},
-      1 // batch_count = 1, default
+      1, // batch_count
+      seed_shift++
     );
 
     rank_k_workspace_.Computed = device_context.allocate_tensor(

@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,10 +42,6 @@ namespace library {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-static std::unique_ptr<Singleton> instance;
-
-/////////////////////////////////////////////////////////////////////////////////////////////////
-
 Singleton::Singleton() {
 
   manifest.initialize();
@@ -54,10 +50,8 @@ Singleton::Singleton() {
 }
 
 Singleton const & Singleton::get() {
-  if (!instance.get()) {
-    instance.reset(new Singleton);
-  }
-  return *instance.get();
+  static Singleton instance;
+  return instance;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////

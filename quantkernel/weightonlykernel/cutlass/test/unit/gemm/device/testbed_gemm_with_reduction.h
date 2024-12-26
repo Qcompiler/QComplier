@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -61,6 +61,7 @@ namespace device {
 
 template <typename Gemm, typename BinaryOp>
 struct GemmWithReductionReference {
+
   using ElementAccumulator = typename Gemm::ElementAccumulator;
   using ElementCompute = typename Gemm::GemmKernel::Epilogue::ElementCompute;
   using ElementC = typename Gemm::ElementC;
@@ -93,6 +94,9 @@ template <
 >
 struct TestbedGemmWithReduction {
 
+  using ElementA = typename Gemm::ElementA;
+  using ElementB = typename Gemm::ElementB;
+  using ElementC = typename Gemm::ElementC;
   using ElementAccumulator = typename Gemm::ElementAccumulator;
   using ElementT = typename Gemm::GemmKernel::Epilogue::ElementTensor;
 
@@ -174,7 +178,6 @@ struct TestbedGemmWithReduction {
       }
     } 
     else {
-      // TODO: Implement the rest
       EXPECT_TRUE(false) << "Not implemented";
       return false;
     }
@@ -359,7 +362,7 @@ struct TestbedGemmWithReduction {
     // Determine SMEM requirements and waive if not satisfied
     //
 
-    int smem_size = int(sizeof(typename Gemm::GemmKernel::SharedStorage));
+    size_t smem_size = sizeof(typename Gemm::GemmKernel::SharedStorage);
 
     cudaDeviceProp properties;
     int device_idx;
@@ -375,7 +378,7 @@ struct TestbedGemmWithReduction {
       throw std::runtime_error("cudaGetDeviceProperties() failed");
     }
 
-    if (properties.sharedMemPerMultiprocessor < smem_size) {
+    if (properties.sharedMemPerBlockOptin < smem_size) {
       return false;
     }
 

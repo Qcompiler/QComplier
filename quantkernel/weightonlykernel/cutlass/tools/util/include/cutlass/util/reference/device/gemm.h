@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -248,7 +248,7 @@ struct Gemm<ElementA, LayoutA, ElementB, LayoutB, ElementC, LayoutC, ScalarType,
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Parital specialization for XOR-popc
+/// Partial specialization for XOR-popc
 template <typename ElementA, typename LayoutA, typename ElementB,
           typename LayoutB, typename ElementC, typename LayoutC,
           typename ScalarType, typename AccumulatorType>

@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -85,7 +85,7 @@ struct TensorReductionAffineStridedParams {
   uint64_t outer_count;                          /// Number of elements in outer index space
 
   ElementOutput * destination;                  /// Pointer to output tensor of rank kReducedRank
-  ElementSource const * source;                 /// Poitner to source pointer of rank kRank
+  ElementSource const * source;                 /// Pointer to source pointer of rank kRank
   ReductionOp reduction_op;                     /// Reduction operator
   ElementCompute reduction_identity;            /// Identity element for reduction operator
   ElementCompute *device_workspace;             /// Pointer to device workspace for inter-CTA reductions
@@ -258,7 +258,7 @@ private:
     ComputeFragment identity_frag;
 
     CUTLASS_PRAGMA_UNROLL
-    for (int i = 0; i < identity_frag.size(); ++i) {
+    for (int i = 0; i < int(identity_frag.size()); ++i) {
       identity_frag[i] = params.reduction_identity;
     }
 
@@ -536,7 +536,7 @@ private:
     ComputeFragment identity_frag;
     
     CUTLASS_PRAGMA_UNROLL
-    for (int i = 0; i < identity_frag.size(); ++i) {
+    for (int i = 0; i < int(identity_frag.size()); ++i) {
       identity_frag[i] = params.reduction_identity;
     }
 

@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -66,6 +66,9 @@ namespace device {
 template <typename Trmm>
 struct TestbedTrmmUniversal {
 
+  using ElementA = typename Trmm::ElementA;
+  using ElementB = typename Trmm::ElementB;
+  using ElementC = typename Trmm::ElementC;
   using ElementAccumulator = typename Trmm::ElementAccumulator;
   using ElementCompute = typename Trmm::TrmmKernel::Epilogue::OutputOp::ElementCompute;
 
@@ -137,7 +140,6 @@ struct TestbedTrmmUniversal {
         view.data(), view.capacity());
     } 
     else {
-      // TODO: Implement the rest
       EXPECT_TRUE(false) << "Not implemented";
       return false;
     }
@@ -183,7 +185,6 @@ struct TestbedTrmmUniversal {
         view, seed, Trmm::kFillMode, 0, 0.5, mantissa_in_bits);
     }
     else {
-      // TODO: Implement the rest
       EXPECT_TRUE(false) << "Not implemented";
       return false;
     }
@@ -227,7 +228,6 @@ struct TestbedTrmmUniversal {
       EXPECT_TRUE(false) << "Gaussian distribution for pad diagonal not implemented";
     }
     else {
-      // TODO: Implement the rest
       EXPECT_TRUE(false) << "Not implemented";
       return false;
     }
@@ -348,7 +348,7 @@ struct TestbedTrmmUniversal {
     // Determine SMEM requirements and waive if not satisfied
     //
 
-    int smem_size = int(sizeof(typename Trmm::TrmmKernel::SharedStorage));
+    size_t smem_size = sizeof(typename Trmm::TrmmKernel::SharedStorage);
 
     cudaDeviceProp properties;
     int device_idx;
@@ -364,7 +364,7 @@ struct TestbedTrmmUniversal {
       throw std::runtime_error("cudaGetDeviceProperties() failed");
     }
 
-    if (properties.sharedMemPerMultiprocessor < smem_size) {
+    if (properties.sharedMemPerBlockOptin < smem_size) {
       return false;
     }
 

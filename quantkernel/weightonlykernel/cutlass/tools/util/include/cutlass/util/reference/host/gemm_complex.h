@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,8 +39,10 @@
 #include "cutlass/numeric_types.h"
 #include "cutlass/functional.h"
 #include "cutlass/numeric_conversion.h"
+#include "cutlass/matrix_coord.h"
 
 #include "cutlass/tensor_view.h"
+
 #include "cutlass/gemm/gemm.h"
 
 namespace cutlass {
@@ -65,7 +67,8 @@ template <
   typename LayoutC,
   typename ScalarType,
   typename ComputeType,
-  typename ConvertOp = NumericConverter<ElementC, ScalarType>,
+  typename ElementD = ElementC,
+  typename ConvertOp = NumericConverter<ElementD, ScalarType>,
   typename InnerProductOp = multiply_add<ComputeType>
 >
 void GemmComplex(
@@ -77,7 +80,7 @@ void GemmComplex(
   ComplexTransform transform_b,
   ScalarType beta,
   TensorRef<ElementC, LayoutC> tensor_c,
-  TensorRef<ElementC, LayoutC> tensor_d,
+  TensorRef<ElementD, LayoutC> tensor_d,
   ComputeType initial_accum,
   int batch_count = 1,
   int64_t batch_stride_A = 0,
@@ -183,7 +186,8 @@ template <
   typename LayoutB,
   typename ElementC,
   typename LayoutC,
-  typename ScalarType
+  typename ScalarType,
+  typename ElementD = ElementC
 >
 void GemmComplex(
   gemm::GemmCoord problem_size,
@@ -194,7 +198,7 @@ void GemmComplex(
   ComplexTransform transform_b,
   ScalarType beta,
   TensorRef<ElementC, LayoutC> tensor_c,
-  TensorRef<ElementC, LayoutC> tensor_d) {
+  TensorRef<ElementD, LayoutC> tensor_d) {
 
   GemmComplex(problem_size, alpha, tensor_a, transform_a, tensor_b, transform_b, beta, tensor_c, tensor_d, ScalarType(0));
 }

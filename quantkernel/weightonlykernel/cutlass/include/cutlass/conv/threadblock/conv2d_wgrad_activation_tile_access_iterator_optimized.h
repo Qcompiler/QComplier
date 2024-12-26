@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -212,7 +212,7 @@ public:
 
     if (kAccessesPerVector > 1) {
       // This code section is only to support non-128b alignment
-      // Multiple access to support non-128b alignment in contiguous dimenstion
+      // Multiple access to support non-128b alignment in contiguous dimension
       int wrap_c;
       params_.c_divmod(wrap_c, c, c + iteration_vector_ * AccessType::kElements);
 
@@ -304,7 +304,7 @@ public:
   static Status can_implement(Conv2dProblemSize const &problem_size) {
 
     // check alignment constraint on iterator's contiguous dimension
-    if (problem_size.K % AccessType::kElements) {
+    if (problem_size.C % AccessType::kElements) {
       return Status::kErrorInvalidProblem;
     }
 

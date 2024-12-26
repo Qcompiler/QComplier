@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,7 +37,7 @@
 
 #pragma once
 
-#include <cutlass/half.h>
+#include "cutlass/half.h"
 #include "cutlass/cutlass.h"
 #include "cutlass/numeric_types.h"
 #include "cutlass/array.h"
@@ -93,6 +93,7 @@ public:
   using FragmentAccumulator = Array<ElementAccumulator, kCount>;
   using FragmentCompute = Array<ElementCompute, kCount>;
   using FragmentScaleBias = Array<ElementCompute, kCount>;
+  using FragmentSource = Array<ElementOutput, kCount>;
 
   static FloatRoundStyle const kRound = Round;
 
@@ -308,6 +309,7 @@ public:
   using FragmentAccumulator = Array<ElementAccumulator, kCount>;
   using FragmentCompute = Array<ElementCompute, kCount>;
   using FragmentScaleBias = Array<ElementCompute, kCount>;
+  using FragmentSource = Array<ElementOutput, kCount>;
 
   static FloatRoundStyle const kRound = Round;
 
@@ -416,7 +418,7 @@ public:
     // Compute threshold optionally
     intermediate = relu(intermediate);
 
-    if (platform::numeric_limits<ElementOutput>::is_integer) {
+    if (cutlass::platform::numeric_limits<ElementOutput>::is_integer) {
       // Convert floats back to INT
       FragmentAccumulator scaled_accumulator;
 
@@ -461,7 +463,7 @@ public:
     // Compute threshold optionally
     intermediate = relu(intermediate);
 
-    if (platform::numeric_limits<ElementOutput>::is_integer) {
+    if (cutlass::platform::numeric_limits<ElementOutput>::is_integer) {
       // Convert floats back to INT
       FragmentAccumulator scaled_accumulator;
 
@@ -509,7 +511,7 @@ public:
     // Compute threshold optionally
     intermediate = relu(intermediate);
 
-    if (platform::numeric_limits<ElementOutput>::is_integer) {
+    if (cutlass::platform::numeric_limits<ElementOutput>::is_integer) {
       // Convert floats back to INT
       FragmentAccumulator scaled_accumulator;
 

@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -64,6 +64,9 @@ namespace device {
 template <typename Symm>
 struct TestbedSymmUniversal {
 
+  using ElementA = typename Symm::ElementA;
+  using ElementB = typename Symm::ElementB;
+  using ElementC = typename Symm::ElementC;
   using ElementAccumulator = typename Symm::ElementAccumulator;
   using ElementCompute = typename Symm::SymmKernel::Epilogue::OutputOp::ElementCompute;
 
@@ -308,7 +311,7 @@ struct TestbedSymmUniversal {
     // Determine SMEM requirements and waive if not satisfied
     //
 
-    int smem_size = int(sizeof(typename Symm::SymmKernel::SharedStorage));
+    size_t smem_size = sizeof(typename Symm::SymmKernel::SharedStorage);
 
     cudaDeviceProp properties;
     int device_idx;
@@ -324,7 +327,7 @@ struct TestbedSymmUniversal {
       throw std::runtime_error("cudaGetDeviceProperties() failed");
     }
 
-    if (properties.sharedMemPerMultiprocessor < smem_size) {
+    if (properties.sharedMemPerBlockOptin < smem_size) {
       return false;
     }
 

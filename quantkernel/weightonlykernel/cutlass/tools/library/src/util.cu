@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -333,7 +333,7 @@ static struct {
 }
 OperationKind_enumerants[] = {
   {"eq_gemm", "EqGemm", OperationKind::kEqGemm}, 
-  {"gemm", "Gemm", OperationKind::kGemm},               
+  {"gemm", "Gemm", OperationKind::kGemm},
   {"rank_k", "RankK", OperationKind::kRankK},
   {"rank_2k", "Rank2K", OperationKind::kRank2K},
   {"trmm", "Trmm", OperationKind::kTrmm},
@@ -422,13 +422,15 @@ Status from_string<Status>(std::string const &str) {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
 static struct {
   char const *text;
   char const *pretty;
   NumericTypeID enumerant;
 }
 NumericTypeID_enumerants[] = {
-  {"unknown", "<unkown>", NumericTypeID::kUnknown},
+  {"unknown", "<unknown>", NumericTypeID::kUnknown},
   {"void", "Void", NumericTypeID::kVoid},
   {"b1", "B1", NumericTypeID::kB1},
   {"u2", "U2", NumericTypeID::kU2},
@@ -443,6 +445,8 @@ NumericTypeID_enumerants[] = {
   {"s16", "S16", NumericTypeID::kS16},
   {"s32", "S32", NumericTypeID::kS32},
   {"s64", "S64", NumericTypeID::kS64},
+  {"fe4m3", "FE4M3", NumericTypeID::kFE4M3},
+  {"fe5m2", "FE5M2", NumericTypeID::kFE5M2},
   {"f16", "F16", NumericTypeID::kF16},
   {"bf16", "BF16", NumericTypeID::kBF16},
   {"f32", "F32", NumericTypeID::kF32},
@@ -465,7 +469,7 @@ NumericTypeID_enumerants[] = {
   {"cs16", "CS16", NumericTypeID::kCS16},
   {"cs32", "CS32", NumericTypeID::kCS32},
   {"cs64", "CS64", NumericTypeID::kCS64},
-  {"*", "<unkown/enumerate all>", NumericTypeID::kUnknown}
+  {"*", "<unknown/enumerate all>", NumericTypeID::kUnknown}
 };
 
 /// Converts a NumericTypeID enumerant to a string
@@ -504,6 +508,8 @@ NumericTypeID from_string<NumericTypeID>(std::string const &str) {
 /// Returns the size of a data type in bits
 int sizeof_bits(NumericTypeID type) {
   switch (type) {
+    case NumericTypeID::kFE4M3: return 8;
+    case NumericTypeID::kFE5M2: return 8;
     case NumericTypeID::kF16: return 16;
     case NumericTypeID::kBF16: return 16;
     case NumericTypeID::kTF32: return 32;
@@ -581,6 +587,8 @@ bool is_integer_type(NumericTypeID type) {
 /// Returns true if numeric type is signed
 bool is_signed_type(NumericTypeID type) {
   switch (type) {
+    case NumericTypeID::kFE4M3: return true;
+    case NumericTypeID::kFE5M2: return true;
     case NumericTypeID::kF16: return true;
     case NumericTypeID::kBF16: return true;
     case NumericTypeID::kTF32: return true;
@@ -610,6 +618,8 @@ bool is_unsigned_integer(NumericTypeID type) {
 /// Returns true if numeric type is floating-point type
 bool is_float_type(NumericTypeID type) {
   switch (type) {
+  case NumericTypeID::kFE4M3: return true;
+  case NumericTypeID::kFE5M2: return true;
   case NumericTypeID::kF16: return true;
   case NumericTypeID::kBF16: return true;
   case NumericTypeID::kTF32: return true;
@@ -958,7 +968,7 @@ static struct {
   ConvKind enumerant;
 }
 ConvKind_enumerants[] = {
-  {"unknown", "<unkown>", ConvKind::kUnknown},
+  {"unknown", "<unknown>", ConvKind::kUnknown},
   {"fprop", "<fprop>", ConvKind::kFprop},
   {"dgrad", "<dgrad>", ConvKind::kDgrad},
   {"wgrad", "<wgrad>", ConvKind::kWgrad},
@@ -994,6 +1004,52 @@ ConvKind from_string<ConvKind>(std::string const &str) {
   }
 
   return ConvKind::kInvalid;
+}
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+static struct {
+  char const *text;
+  char const *pretty;
+  char const *character;
+  RasterOrder enumerant;
+}
+RasterOrder_enumerants[] = {
+  {"along_n", "<along_n>", "N", RasterOrder::kAlongN},
+  {"along_m", "<along_m>", "M", RasterOrder::kAlongM},
+  {"heuristic", "<heuristic>", "H", RasterOrder::kHeuristic},
+};
+
+/// Converts a RasterOrder enumerant to a string
+char const *to_string(RasterOrder type, bool pretty) {
+
+  for (auto const & possible : RasterOrder_enumerants) {
+    if (type == possible.enumerant) {
+      if (pretty) {
+        return possible.pretty;
+      }
+      else {
+        return possible.text;
+      }
+    }
+  }
+
+  return pretty ? "Invalid" : "invalid";
+}
+
+
+/// Converts a RasterOrder enumerant from a string
+template <>
+RasterOrder from_string<RasterOrder>(std::string const &str) {
+
+  for (auto const & possible : RasterOrder_enumerants) {
+    if ((str.compare(possible.text) == 0) ||
+        (str.compare(possible.pretty) == 0) ||
+        (str.compare(possible.character) == 0)) {
+      return possible.enumerant;
+    }
+  }
+
+  return RasterOrder::kInvalid;
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1048,6 +1104,20 @@ bool lexical_cast(std::vector<uint8_t> &bytes, NumericTypeID type, std::string c
   case NumericTypeID::kS64:
   {
     ss >> *reinterpret_cast<int64_t *>(bytes.data());
+  }
+    break;
+  case NumericTypeID::kFE4M3:
+  {
+    float tmp;
+    ss >> tmp;
+    *reinterpret_cast<float_e4m3_t *>(bytes.data()) = static_cast<float_e4m3_t>(tmp);
+  }
+    break;
+  case NumericTypeID::kFE5M2:
+  {
+    float tmp;
+    ss >> tmp;
+    *reinterpret_cast<float_e5m2_t *>(bytes.data()) = static_cast<float_e5m2_t>(tmp);
   }
     break;
   case NumericTypeID::kF16:
@@ -1136,7 +1206,7 @@ std::string lexical_cast(int64_t int_value) {
 /// Lexical cast TO a string FROM a byte array. Returns true if cast is successful or false if invalid.
 std::string lexical_cast(std::vector<uint8_t> &bytes, NumericTypeID type) {
 
-  int size_bytes = sizeof_bits(type) / 8;
+  size_t size_bytes = sizeof_bits(type) / 8;
 
   if (!size_bytes || size_bytes != bytes.size()) {
     return "<invalid>";
@@ -1185,6 +1255,18 @@ std::string lexical_cast(std::vector<uint8_t> &bytes, NumericTypeID type) {
   case NumericTypeID::kS64:
   {
     ss << *reinterpret_cast<int64_t *>(bytes.data());
+  }
+    break;
+  case NumericTypeID::kFE4M3:
+  {
+    float tmp = *reinterpret_cast<float_e4m3_t *>(bytes.data());
+    ss << tmp;
+  }
+    break;
+  case NumericTypeID::kFE5M2:
+  {
+    float tmp = *reinterpret_cast<float_e5m2_t *>(bytes.data());
+    ss << tmp;
   }
     break;
   case NumericTypeID::kF16:
@@ -1329,6 +1411,16 @@ bool cast_from_int64(std::vector<uint8_t> &bytes, NumericTypeID type, int64_t sr
     *reinterpret_cast<int64_t *>(bytes.data()) = static_cast<int64_t>(src);
   }
     break;
+  case NumericTypeID::kFE4M3:
+  {
+    *reinterpret_cast<float_e4m3_t *>(bytes.data()) = static_cast<float_e4m3_t>(float(src));
+  }
+    break;
+  case NumericTypeID::kFE5M2:
+  {
+    *reinterpret_cast<float_e5m2_t *>(bytes.data()) = static_cast<float_e5m2_t>(float(src));
+  }
+    break;
   case NumericTypeID::kF16:
   {
     *reinterpret_cast<half_t *>(bytes.data()) = static_cast<half_t>(float(src));
@@ -1427,6 +1519,16 @@ bool cast_from_uint64(std::vector<uint8_t> &bytes, NumericTypeID type, uint64_t 
   case NumericTypeID::kS64:
   {
     *reinterpret_cast<int64_t *>(bytes.data()) = static_cast<int64_t>(src);
+  }
+    break;
+  case NumericTypeID::kFE4M3:
+  {
+    *reinterpret_cast<float_e4m3_t *>(bytes.data()) = static_cast<float_e4m3_t>(float(src));
+  }
+    break;
+  case NumericTypeID::kFE5M2:
+  {
+    *reinterpret_cast<float_e5m2_t *>(bytes.data()) = static_cast<float_e5m2_t>(float(src));
   }
     break;
   case NumericTypeID::kF16:
@@ -1528,6 +1630,16 @@ bool cast_from_double(std::vector<uint8_t> &bytes, NumericTypeID type, double sr
   case NumericTypeID::kS64:
   {
     *reinterpret_cast<int64_t *>(bytes.data()) = static_cast<int64_t>(src);
+  }
+    break;
+  case NumericTypeID::kFE4M3:
+  {
+    *reinterpret_cast<float_e4m3_t *>(bytes.data()) = static_cast<float_e4m3_t>(float(src));
+  }
+    break;
+  case NumericTypeID::kFE5M2:
+  {
+    *reinterpret_cast<float_e5m2_t *>(bytes.data()) = static_cast<float_e5m2_t>(float(src));
   }
     break;
   case NumericTypeID::kF16:

@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -65,7 +65,8 @@ template <
   typename LayoutC,
   typename ElementCompute,
   typename ElementAccumulator = ElementCompute,
-  typename ConvertOp = NumericConverter<ElementC, ElementCompute>,
+  typename ElementD = ElementC,
+  typename ConvertOp = NumericConverter<ElementD, ElementCompute>,
   typename InnerProductOp = multiply_add<ElementAccumulator>
 >
 void Conv2dFprop(
@@ -73,7 +74,7 @@ void Conv2dFprop(
   TensorRef<ElementA, LayoutA> tensor_x,
   TensorRef<ElementB, LayoutB> tensor_w,
   TensorRef<ElementC, LayoutC> tensor_y_in,
-  TensorRef<ElementC, LayoutC> tensor_y_out,
+  TensorRef<ElementD, LayoutC> tensor_y_out,
   ElementCompute alpha,
   ElementCompute beta) {
 
@@ -142,12 +143,13 @@ template <typename ElementA,
           typename LayoutC,
           typename ElementCompute,
           typename ElementAccumulator = ElementCompute,
-          typename ConvertOp = NumericConverter<ElementC, ElementCompute>,
-          typename InnerProductOp = multiply_add<ElementAccumulator> >
+          typename ElementD = ElementC,
+          typename ConvertOp = NumericConverter<ElementD, ElementCompute>,
+          typename InnerProductOp = multiply_add<ElementAccumulator>>
 void Depsep_Fprop(cutlass::TensorView<ElementA, LayoutA> tensor_A,
                   cutlass::TensorView<ElementB, LayoutB> tensor_B,
                   cutlass::TensorView<ElementC, LayoutC> tensor_C,
-                  cutlass::TensorView<ElementC, LayoutC> tensor_D,
+                  cutlass::TensorView<ElementD, LayoutC> tensor_D,
                   ElementCompute alpha,
                   ElementCompute beta,
                   cutlass::Tensor4DCoord padding = cutlass::Tensor4DCoord(),
@@ -195,7 +197,7 @@ void Depsep_Fprop(cutlass::TensorView<ElementA, LayoutA> tensor_A,
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-/// Dgrad
+/// Dgrad / Deconv
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// dx = dgrad(dy, w)
@@ -208,7 +210,8 @@ template <
   typename LayoutC,
   typename ElementCompute,
   typename ElementAccumulator = ElementCompute,
-  typename ConvertOp = NumericConverter<ElementC, ElementCompute>,
+  typename ElementD = ElementC,
+  typename ConvertOp = NumericConverter<ElementD, ElementCompute>,
   typename InnerProductOp = multiply_add<ElementAccumulator>
 >
 void Conv2dDgrad(
@@ -216,9 +219,10 @@ void Conv2dDgrad(
   TensorRef<ElementA, LayoutA> tensor_dy,
   TensorRef<ElementB, LayoutB> tensor_w,
   TensorRef<ElementC, LayoutC> tensor_dx_in,
-  TensorRef<ElementC, LayoutC> tensor_dx_out,
+  TensorRef<ElementD, LayoutC> tensor_dx_out,
   ElementCompute alpha,
-  ElementCompute beta) {
+  ElementCompute beta,
+  bool is_deconv = false) {
 
   ConvertOp convert_op;
   InnerProductOp inner_product_op;
@@ -269,7 +273,8 @@ void Conv2dDgrad(
                   if (p < problem_size.P && q < problem_size.Q) {
 
                     ElementA a = tensor_dy.at(cutlass::make_Coord(n, p, q, k));
-                    ElementB b = tensor_w.at(cutlass::make_Coord(k, r, s, c));
+                    ElementB b = is_deconv ? tensor_w.at(cutlass::make_Coord(c, r, s, k))
+                        : tensor_w.at(cutlass::make_Coord(k, r, s, c));
 
                     acc = inner_product_op(ElementAccumulator(a), ElementAccumulator(b), acc);
                   }
@@ -309,7 +314,8 @@ template <
   typename LayoutC,
   typename ElementCompute,
   typename ElementAccumulator = ElementCompute,
-  typename ConvertOp = NumericConverter<ElementC, ElementCompute>,
+  typename ElementD = ElementC,
+  typename ConvertOp = NumericConverter<ElementD, ElementCompute>,
   typename InnerProductOp = multiply_add<ElementAccumulator>
 >
 void Conv2dWgrad(
@@ -317,7 +323,7 @@ void Conv2dWgrad(
   TensorRef<ElementA, LayoutA> tensor_dy,
   TensorRef<ElementB, LayoutB> tensor_x,
   TensorRef<ElementC, LayoutC> tensor_dw_in,
-  TensorRef<ElementC, LayoutC> tensor_dw_out,
+  TensorRef<ElementD, LayoutC> tensor_dw_out,
   ElementCompute alpha,
   ElementCompute beta) {
   
@@ -389,7 +395,8 @@ template <
   typename LayoutC,
   typename ElementCompute,
   typename ElementAccumulator = ElementCompute,
-  typename ConvertOp = NumericConverter<ElementC, ElementCompute>,
+  typename ElementD = ElementC,
+  typename ConvertOp = NumericConverter<ElementD, ElementCompute>,
   typename InnerProductOp = multiply_add<ElementAccumulator>
 >
 void Conv2d(
@@ -398,7 +405,7 @@ void Conv2d(
   TensorRef<ElementA, LayoutA> tensor_A,
   TensorRef<ElementB, LayoutB> tensor_B,
   TensorRef<ElementC, LayoutC> tensor_C,
-  TensorRef<ElementC, LayoutC> tensor_D,
+  TensorRef<ElementD, LayoutC> tensor_D,
   ElementCompute alpha,
   ElementCompute beta) {
 
@@ -409,11 +416,13 @@ void Conv2d(
       ElementB, LayoutB,
       ElementC, LayoutC,
       ElementCompute,
-      ElementAccumulator, 
+      ElementAccumulator,
+      ElementD,
       ConvertOp, InnerProductOp
     >(problem_size, tensor_A, tensor_B, tensor_C, tensor_D, alpha, beta);
     break;
 
+  case conv::Operator::kDeconv:
   case conv::Operator::kDgrad:
     Conv2dDgrad<
       ElementA, LayoutA,
@@ -421,8 +430,9 @@ void Conv2d(
       ElementC, LayoutC,
       ElementCompute,
       ElementAccumulator,
+      ElementD,
       ConvertOp, InnerProductOp
-    >(problem_size, tensor_A, tensor_B, tensor_C, tensor_D, alpha, beta);
+    >(problem_size, tensor_A, tensor_B, tensor_C, tensor_D, alpha, beta, (convolutional_operator == conv::Operator::kDeconv));
     break;
 
   case conv::Operator::kWgrad:
@@ -431,7 +441,8 @@ void Conv2d(
       ElementB, LayoutB,
       ElementC, LayoutC,
       ElementCompute,
-      ElementAccumulator, 
+      ElementAccumulator,
+      ElementD,
       ConvertOp, InnerProductOp
     >(problem_size, tensor_A, tensor_B, tensor_C, tensor_D, alpha, beta);
     break;
@@ -529,7 +540,7 @@ void Conv3dFprop(
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-/// Dgrad
+/// Dgrad / Deconv
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /// dx = dgrad(dy, w)
@@ -552,7 +563,8 @@ void Conv3dDgrad(
   TensorRef<ElementC, LayoutC> tensor_dx_in,
   TensorRef<ElementC, LayoutC> tensor_dx_out,
   ElementCompute alpha,
-  ElementCompute beta) {
+  ElementCompute beta,
+  bool is_deconv = false) {
 
   ConvertOp convert_op;
   InnerProductOp inner_product_op;
@@ -596,8 +608,8 @@ void Conv3dDgrad(
                       if (z < problem_size.Z && p < problem_size.P && q < problem_size.Q) {
 
                         ElementA a = tensor_dy.at(cutlass::make_Coord(n, z, p, q, k));
-                        ElementB b = tensor_w.at(cutlass::make_Coord(k, t, r, s, c));
-
+                        ElementB b = is_deconv ? tensor_w.at(cutlass::make_Coord(c, t, r, s, k))
+                            : tensor_w.at(cutlass::make_Coord(k, t, r, s, c));
                         acc = inner_product_op(ElementAccumulator(a), ElementAccumulator(b), acc);
                       }
                     }
@@ -752,6 +764,7 @@ void Conv3d(
     >(problem_size, tensor_A, tensor_B, tensor_C, tensor_D, alpha, beta);
     break;
 
+  case conv::Operator::kDeconv:
   case conv::Operator::kDgrad:
     Conv3dDgrad<
       ElementA, LayoutA,
@@ -760,7 +773,7 @@ void Conv3d(
       ElementCompute,
       ElementAccumulator, 
       ConvertOp, InnerProductOp
-    >(problem_size, tensor_A, tensor_B, tensor_C, tensor_D, alpha, beta);
+    >(problem_size, tensor_A, tensor_B, tensor_C, tensor_D, alpha, beta, (convolutional_operator == conv::Operator::kDeconv));
     break;
 
   case conv::Operator::kWgrad:

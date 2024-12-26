@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -46,7 +46,7 @@
 
 #include "cutlass/library/util.h"
 
-#include "device_allocation.h"
+#include "cutlass/profiler/device_allocation.h"
 
 namespace cutlass {
 namespace profiler {
@@ -442,12 +442,12 @@ int DeviceAllocation::batch_count() const {
   return batch_count_;
 }
 
-/// Gets the stride (in units of elements) beteween items
+/// Gets the stride (in units of elements) between items
 int64_t DeviceAllocation::batch_stride() const {
   return batch_stride_;
 }
 
-/// Gets the stride (in units of bytes) beteween items
+/// Gets the stride (in units of bytes) between items
 int64_t DeviceAllocation::batch_stride_bytes() const {
   return bytes(type_, batch_stride_);
 }
@@ -462,6 +462,13 @@ size_t DeviceAllocation::bytes() const {
 
 /// Copies from an equivalent-sized tensor in device memory
 void DeviceAllocation::copy_from_device(void const *ptr) {
+  if (!bytes()) {
+#ifndef NDEBUG
+    std::cout << "Skipping copy of size 0 allocation\n";
+#endif
+    return;
+  }
+
   cudaError_t result = cudaMemcpy(data(), ptr, bytes(), cudaMemcpyDeviceToDevice);
   if (result != cudaSuccess) {
     throw std::runtime_error("Failed device-to-device copy");
@@ -470,22 +477,43 @@ void DeviceAllocation::copy_from_device(void const *ptr) {
 
 /// Copies from an equivalent-sized tensor in device memory
 void DeviceAllocation::copy_from_host(void const *ptr) {
+  if (!bytes()) {
+#ifndef NDEBUG
+    std::cout << "Skipping copy of size 0 allocation\n";
+#endif
+    return;
+  }
+
   cudaError_t result = cudaMemcpy(data(), ptr, bytes(), cudaMemcpyHostToDevice);
   if (result != cudaSuccess) {
-    throw std::runtime_error("Failed device-to-device copy");
+    throw std::runtime_error("Failed host-to-device copy");
   }
 }
 
 /// Copies from an equivalent-sized tensor in device memory
 void DeviceAllocation::copy_to_host(void *ptr) {
+  if (!bytes()) {
+#ifndef NDEBUG
+    std::cout << "Skipping copy of size 0 allocation\n";
+#endif
+    return;
+  }
+
   cudaError_t result = cudaMemcpy(ptr, data(), bytes(), cudaMemcpyDeviceToHost);
   if (result != cudaSuccess) {
-    throw std::runtime_error("Failed device-to-device copy");
+    throw std::runtime_error("Failed device-to-host copy");
   }
 }
 
 void DeviceAllocation::initialize_random_device(int seed, Distribution dist) {
-  if (!good()) {
+  if (!bytes()) {
+#ifndef NDEBUG
+    std::cout << "Skipping initialization of size 0 allocation\n";
+#endif
+    return;
+  }
+
+  if (!data()) {
     throw std::runtime_error("Attempting to initialize invalid allocation.");
   }
 
@@ -544,6 +572,22 @@ void DeviceAllocation::initialize_random_device(int seed, Distribution dist) {
   case library::NumericTypeID::kCF32:
     cutlass::reference::device::BlockFillRandom<cutlass::complex<float>>(
       reinterpret_cast<cutlass::complex<float> *>(pointer_),
+      capacity_,
+      seed,
+      dist
+    );
+    break;
+  case library::NumericTypeID::kFE4M3:
+    cutlass::reference::device::BlockFillRandom<cutlass::float_e4m3_t>(
+      reinterpret_cast<cutlass::float_e4m3_t *>(pointer_),
+      capacity_,
+      seed,
+      dist
+    );
+    break;
+  case library::NumericTypeID::kFE5M2:
+    cutlass::reference::device::BlockFillRandom<cutlass::float_e5m2_t>(
+      reinterpret_cast<cutlass::float_e5m2_t *>(pointer_),
       capacity_,
       seed,
       dist
@@ -674,13 +718,36 @@ void DeviceAllocation::initialize_random_device(int seed, Distribution dist) {
 }
 
 void DeviceAllocation::initialize_random_host(int seed, Distribution dist) {
-  if (!good()) {
+  if (!bytes()) {
+#ifndef NDEBUG
+    std::cout << "Skipping initialization of size 0 allocation\n";
+#endif
+    return;
+  }
+
+  if (!data()) {
     throw std::runtime_error("Attempting to initialize invalid allocation.");
   }
 
   std::vector<uint8_t> host_data(bytes());
 
   switch (type_) {
+  case library::NumericTypeID::kFE4M3:
+    cutlass::reference::host::BlockFillRandom<cutlass::float_e4m3_t>(
+      reinterpret_cast<cutlass::float_e4m3_t *>(host_data.data()),
+      capacity_,
+      seed,
+      dist
+    );
+    break;
+  case library::NumericTypeID::kFE5M2:
+    cutlass::reference::host::BlockFillRandom<cutlass::float_e5m2_t>(
+      reinterpret_cast<cutlass::float_e5m2_t *>(host_data.data()),
+      capacity_,
+      seed,
+      dist
+    );
+    break;
   case library::NumericTypeID::kF16:
     cutlass::reference::host::BlockFillRandom<cutlass::half_t>(
       reinterpret_cast<cutlass::half_t *>(host_data.data()),
@@ -871,8 +938,474 @@ void DeviceAllocation::initialize_random_host(int seed, Distribution dist) {
   copy_from_host(host_data.data());
 }
 
+void DeviceAllocation::initialize_sequential_device(Distribution dist) {
+  if (!bytes()) {
+#ifndef NDEBUG
+    std::cout << "Skipping initialization of size 0 allocation\n";
+#endif
+    return;
+  }
+
+  if (!data()) {
+    throw std::runtime_error("Attempting to initialize invalid allocation.");
+  }
+
+  switch (type_) {
+  case library::NumericTypeID::kFE4M3:
+    cutlass::reference::device::BlockFillSequential<cutlass::float_e4m3_t>(
+      reinterpret_cast<cutlass::float_e4m3_t *>(pointer_),
+      capacity_,
+      static_cast<cutlass::float_e4m3_t>(dist.sequential.delta),
+      static_cast<cutlass::float_e4m3_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kFE5M2:
+    cutlass::reference::device::BlockFillSequential<cutlass::float_e5m2_t>(
+      reinterpret_cast<cutlass::float_e5m2_t *>(pointer_),
+      capacity_,
+      static_cast<cutlass::float_e5m2_t>(dist.sequential.delta),
+      static_cast<cutlass::float_e5m2_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kF16:
+    cutlass::reference::device::BlockFillSequential<cutlass::half_t>(
+      reinterpret_cast<cutlass::half_t *>(pointer_),
+      capacity_,
+      static_cast<cutlass::half_t>(dist.sequential.delta),
+      static_cast<cutlass::half_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kBF16:
+    cutlass::reference::device::BlockFillSequential<cutlass::bfloat16_t>(
+      reinterpret_cast<cutlass::bfloat16_t *>(pointer_),
+      capacity_,
+      static_cast<cutlass::bfloat16_t>(dist.sequential.delta),
+      static_cast<cutlass::bfloat16_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kTF32:
+    cutlass::reference::device::BlockFillSequential<cutlass::tfloat32_t>(
+      reinterpret_cast<cutlass::tfloat32_t *>(pointer_),
+      capacity_,
+      static_cast<cutlass::tfloat32_t>(dist.sequential.delta),
+      static_cast<cutlass::tfloat32_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kF32:
+    cutlass::reference::device::BlockFillSequential<float>(
+      reinterpret_cast<float *>(pointer_),
+      capacity_,
+      static_cast<float>(dist.sequential.delta),
+      static_cast<float>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kCF16:
+    cutlass::reference::device::BlockFillSequential<cutlass::complex<cutlass::half_t>>(
+      reinterpret_cast<cutlass::complex<cutlass::half_t> *>(pointer_),
+      capacity_,
+      cutlass::complex<cutlass::half_t>(
+        static_cast<cutlass::half_t>(dist.sequential.delta)),
+      cutlass::complex<cutlass::half_t>(
+        static_cast<cutlass::half_t>(dist.sequential.start))
+    );
+    break;
+  case library::NumericTypeID::kCBF16:
+    cutlass::reference::device::BlockFillSequential<cutlass::complex<cutlass::bfloat16_t>>(
+      reinterpret_cast<cutlass::complex<cutlass::bfloat16_t> *>(pointer_),
+      capacity_,
+      cutlass::complex<cutlass::bfloat16_t>(
+        static_cast<cutlass::bfloat16_t>(dist.sequential.delta)),
+      cutlass::complex<cutlass::bfloat16_t>(
+        static_cast<cutlass::bfloat16_t>(dist.sequential.start))
+    );
+    break;
+  case library::NumericTypeID::kCTF32:
+    cutlass::reference::device::BlockFillSequential<cutlass::complex<cutlass::tfloat32_t>>(
+      reinterpret_cast<cutlass::complex<cutlass::tfloat32_t> *>(pointer_),
+      capacity_,
+      cutlass::complex<cutlass::tfloat32_t>(
+        static_cast<cutlass::tfloat32_t>(dist.sequential.delta)),
+      cutlass::complex<cutlass::tfloat32_t>(
+        static_cast<cutlass::tfloat32_t>(dist.sequential.start))
+    );
+    break;
+  case library::NumericTypeID::kCF32:
+    cutlass::reference::device::BlockFillSequential<cutlass::complex<float>>(
+      reinterpret_cast<cutlass::complex<float> *>(pointer_),
+      capacity_,
+      cutlass::complex<float>(
+        static_cast<float>(dist.sequential.delta)),
+      cutlass::complex<float>(
+        static_cast<float>(dist.sequential.start))
+    );
+    break;
+  case library::NumericTypeID::kF64:
+    cutlass::reference::device::BlockFillSequential<double>(
+      reinterpret_cast<double *>(pointer_),
+      capacity_,
+      static_cast<double>(dist.sequential.delta),
+      static_cast<double>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kCF64:
+    cutlass::reference::device::BlockFillSequential<cutlass::complex<double>>(
+      reinterpret_cast<cutlass::complex<double> *>(pointer_),
+      capacity_,
+      cutlass::complex<double>(
+        static_cast<double>(dist.sequential.delta)),
+      cutlass::complex<double>(
+        static_cast<double>(dist.sequential.start))
+    );
+    break;
+  case library::NumericTypeID::kS2:
+    cutlass::reference::device::BlockFillSequential<int2b_t>(
+      reinterpret_cast<int2b_t *>(pointer_),
+      capacity_,
+      static_cast<int2b_t>(dist.sequential.delta),
+      static_cast<int2b_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kS4:
+    cutlass::reference::device::BlockFillSequential<int4b_t>(
+      reinterpret_cast<int4b_t *>(pointer_),
+      capacity_,
+      static_cast<int4b_t>(dist.sequential.delta),
+      static_cast<int4b_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kS8:
+    cutlass::reference::device::BlockFillSequential<int8_t>(
+      reinterpret_cast<int8_t *>(pointer_),
+      capacity_,
+      static_cast<int8_t>(dist.sequential.delta),
+      static_cast<int8_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kS16:
+    cutlass::reference::device::BlockFillSequential<int16_t>(
+      reinterpret_cast<int16_t *>(pointer_),
+      capacity_,
+      static_cast<int16_t>(dist.sequential.delta),
+      static_cast<int16_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kS32:
+    cutlass::reference::device::BlockFillSequential<int32_t>(
+      reinterpret_cast<int32_t *>(pointer_),
+      capacity_,
+      static_cast<int32_t>(dist.sequential.delta),
+      static_cast<int32_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kS64:
+    cutlass::reference::device::BlockFillSequential<int64_t>(
+      reinterpret_cast<int64_t *>(pointer_),
+      capacity_,
+      static_cast<int64_t>(dist.sequential.delta),
+      static_cast<int64_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kB1:
+    cutlass::reference::device::BlockFillSequential<uint1b_t>(
+      reinterpret_cast<uint1b_t *>(pointer_),
+      capacity_,
+      static_cast<uint1b_t>(dist.sequential.delta),
+      static_cast<uint1b_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kU2:
+    cutlass::reference::device::BlockFillSequential<uint2b_t>(
+      reinterpret_cast<uint2b_t *>(pointer_),
+      capacity_,
+      static_cast<uint2b_t>(dist.sequential.delta),
+      static_cast<uint2b_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kU4:
+    cutlass::reference::device::BlockFillSequential<uint4b_t>(
+      reinterpret_cast<uint4b_t *>(pointer_),
+      capacity_,
+      static_cast<uint4b_t>(dist.sequential.delta),
+      static_cast<uint4b_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kU8:
+    cutlass::reference::device::BlockFillSequential<uint8_t>(
+      reinterpret_cast<uint8_t *>(pointer_),
+      capacity_,
+      static_cast<uint8_t>(dist.sequential.delta),
+      static_cast<uint8_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kU16:
+    cutlass::reference::device::BlockFillSequential<uint16_t>(
+      reinterpret_cast<uint16_t *>(pointer_),
+      capacity_,
+      static_cast<uint16_t>(dist.sequential.delta),
+      static_cast<uint16_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kU32:
+    cutlass::reference::device::BlockFillSequential<uint32_t>(
+      reinterpret_cast<uint32_t *>(pointer_),
+      capacity_,
+      static_cast<uint32_t>(dist.sequential.delta),
+      static_cast<uint32_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kU64:
+    cutlass::reference::device::BlockFillSequential<uint64_t>(
+      reinterpret_cast<uint64_t *>(pointer_),
+      capacity_,
+      static_cast<uint64_t>(dist.sequential.delta),
+      static_cast<uint64_t>(dist.sequential.start)
+    );
+    break;
+  default: break;
+  }
+
+}
+
+void DeviceAllocation::initialize_sequential_host(Distribution dist) {
+  if (!bytes()) {
+#ifndef NDEBUG
+    std::cout << "Skipping initialization of size 0 allocation\n";
+#endif
+    return;
+  }
+
+  if (!data()) {
+    throw std::runtime_error("Attempting to initialize invalid allocation.");
+  }
+
+  std::vector<uint8_t> host_data(bytes());
+
+  switch (type_) {
+  case library::NumericTypeID::kFE4M3:
+    cutlass::reference::host::BlockFillSequential<cutlass::float_e4m3_t>(
+      reinterpret_cast<cutlass::float_e4m3_t *>(host_data.data()),
+      capacity_,
+      static_cast<cutlass::float_e4m3_t>(dist.sequential.delta),
+      static_cast<cutlass::float_e4m3_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kFE5M2:
+    cutlass::reference::host::BlockFillSequential<cutlass::float_e5m2_t>(
+      reinterpret_cast<cutlass::float_e5m2_t *>(host_data.data()),
+      capacity_,
+      static_cast<cutlass::float_e5m2_t>(dist.sequential.delta),
+      static_cast<cutlass::float_e5m2_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kF16:
+    cutlass::reference::host::BlockFillSequential<cutlass::half_t>(
+      reinterpret_cast<cutlass::half_t *>(host_data.data()),
+      capacity_,
+      static_cast<cutlass::half_t>(dist.sequential.delta),
+      static_cast<cutlass::half_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kBF16:
+    cutlass::reference::host::BlockFillSequential<cutlass::bfloat16_t>(
+      reinterpret_cast<cutlass::bfloat16_t *>(host_data.data()),
+      capacity_,
+      static_cast<cutlass::bfloat16_t>(dist.sequential.delta),
+      static_cast<cutlass::bfloat16_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kTF32:
+    cutlass::reference::host::BlockFillSequential<cutlass::tfloat32_t>(
+      reinterpret_cast<cutlass::tfloat32_t *>(host_data.data()),
+      capacity_,
+      static_cast<cutlass::tfloat32_t>(dist.sequential.delta),
+      static_cast<cutlass::tfloat32_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kF32:
+    cutlass::reference::host::BlockFillSequential<float>(
+      reinterpret_cast<float *>(host_data.data()),
+      capacity_,
+      static_cast<float>(dist.sequential.delta),
+      static_cast<float>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kCF16:
+    cutlass::reference::host::BlockFillSequential<cutlass::complex<cutlass::half_t>>(
+      reinterpret_cast<cutlass::complex<cutlass::half_t> *>(host_data.data()),
+      capacity_,
+      cutlass::complex<cutlass::half_t>(
+        static_cast<cutlass::half_t>(dist.sequential.delta)),
+      cutlass::complex<cutlass::half_t>(
+        static_cast<cutlass::half_t>(dist.sequential.start))
+    );
+    break;
+  case library::NumericTypeID::kCBF16:
+    cutlass::reference::host::BlockFillSequential<cutlass::complex<cutlass::bfloat16_t>>(
+      reinterpret_cast<cutlass::complex<cutlass::bfloat16_t> *>(host_data.data()),
+      capacity_,
+      cutlass::complex<cutlass::bfloat16_t>(
+        static_cast<cutlass::bfloat16_t>(dist.sequential.delta)),
+      cutlass::complex<cutlass::bfloat16_t>(
+        static_cast<cutlass::bfloat16_t>(dist.sequential.start))
+    );
+    break;
+  case library::NumericTypeID::kCTF32:
+    cutlass::reference::host::BlockFillSequential<cutlass::complex<cutlass::tfloat32_t>>(
+      reinterpret_cast<cutlass::complex<cutlass::tfloat32_t> *>(host_data.data()),
+      capacity_,
+      cutlass::complex<cutlass::tfloat32_t>(
+        static_cast<cutlass::tfloat32_t>(dist.sequential.delta)),
+      cutlass::complex<cutlass::tfloat32_t>(
+        static_cast<cutlass::tfloat32_t>(dist.sequential.start))
+    );
+    break;
+  case library::NumericTypeID::kCF32:
+    cutlass::reference::host::BlockFillSequential<cutlass::complex<float>>(
+      reinterpret_cast<cutlass::complex<float> *>(host_data.data()),
+      capacity_,
+      cutlass::complex<float>(
+        static_cast<float>(dist.sequential.delta)),
+      cutlass::complex<float>(
+        static_cast<float>(dist.sequential.start))
+    );
+    break;
+  case library::NumericTypeID::kF64:
+    cutlass::reference::host::BlockFillSequential<double>(
+      reinterpret_cast<double *>(host_data.data()),
+      capacity_,
+      static_cast<double>(dist.sequential.delta),
+      static_cast<double>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kCF64:
+    cutlass::reference::host::BlockFillSequential<cutlass::complex<double>>(
+      reinterpret_cast<cutlass::complex<double> *>(host_data.data()),
+      capacity_,
+      cutlass::complex<double>(
+        static_cast<double>(dist.sequential.delta)),
+      cutlass::complex<double>(
+        static_cast<double>(dist.sequential.start))
+    );
+    break;
+  case library::NumericTypeID::kS2:
+    cutlass::reference::host::BlockFillSequential<int2b_t>(
+      reinterpret_cast<int2b_t *>(host_data.data()),
+      capacity_,
+      static_cast<int2b_t>(dist.sequential.delta),
+      static_cast<int2b_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kS4:
+    cutlass::reference::host::BlockFillSequential<int4b_t>(
+      reinterpret_cast<int4b_t *>(host_data.data()),
+      capacity_,
+      static_cast<int4b_t>(dist.sequential.delta),
+      static_cast<int4b_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kS8:
+    cutlass::reference::host::BlockFillSequential<int8_t>(
+      reinterpret_cast<int8_t *>(host_data.data()),
+      capacity_,
+      static_cast<int8_t>(dist.sequential.delta),
+      static_cast<int8_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kS16:
+    cutlass::reference::host::BlockFillSequential<int16_t>(
+      reinterpret_cast<int16_t *>(host_data.data()),
+      capacity_,
+      static_cast<int16_t>(dist.sequential.delta),
+      static_cast<int16_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kS32:
+    cutlass::reference::host::BlockFillSequential<int32_t>(
+      reinterpret_cast<int32_t *>(host_data.data()),
+      capacity_,
+      static_cast<int32_t>(dist.sequential.delta),
+      static_cast<int32_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kS64:
+    cutlass::reference::host::BlockFillSequential<int64_t>(
+      reinterpret_cast<int64_t *>(host_data.data()),
+      capacity_,
+      static_cast<int64_t>(dist.sequential.delta),
+      static_cast<int64_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kB1:
+    cutlass::reference::host::BlockFillSequential<uint1b_t>(
+      reinterpret_cast<uint1b_t *>(host_data.data()),
+      capacity_,
+      static_cast<uint1b_t>(dist.sequential.delta),
+      static_cast<uint1b_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kU2:
+    cutlass::reference::host::BlockFillSequential<uint2b_t>(
+      reinterpret_cast<uint2b_t *>(host_data.data()),
+      capacity_,
+      static_cast<uint2b_t>(dist.sequential.delta),
+      static_cast<uint2b_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kU4:
+    cutlass::reference::host::BlockFillSequential<uint4b_t>(
+      reinterpret_cast<uint4b_t *>(host_data.data()),
+      capacity_,
+      static_cast<uint4b_t>(dist.sequential.delta),
+      static_cast<uint4b_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kU8:
+    cutlass::reference::host::BlockFillSequential<uint8_t>(
+      reinterpret_cast<uint8_t *>(host_data.data()),
+      capacity_,
+      static_cast<uint8_t>(dist.sequential.delta),
+      static_cast<uint8_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kU16:
+    cutlass::reference::host::BlockFillSequential<uint16_t>(
+      reinterpret_cast<uint16_t *>(host_data.data()),
+      capacity_,
+      static_cast<uint16_t>(dist.sequential.delta),
+      static_cast<uint16_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kU32:
+    cutlass::reference::host::BlockFillSequential<uint32_t>(
+      reinterpret_cast<uint32_t *>(host_data.data()),
+      capacity_,
+      static_cast<uint32_t>(dist.sequential.delta),
+      static_cast<uint32_t>(dist.sequential.start)
+    );
+    break;
+  case library::NumericTypeID::kU64:
+    cutlass::reference::host::BlockFillSequential<uint64_t>(
+      reinterpret_cast<uint64_t *>(host_data.data()),
+      capacity_,
+      static_cast<uint64_t>(dist.sequential.delta),
+      static_cast<uint64_t>(dist.sequential.start)
+    );
+    break;
+  default: break;
+  }
+
+  copy_from_host(host_data.data());
+}
+
 void DeviceAllocation::initialize_random_sparsemeta_device(int seed, int MetaSizeInBits) {
-  if (!good()) {
+  if (!bytes()) {
+#ifndef NDEBUG
+    std::cout << "Skipping initialization of size 0 allocation\n";
+#endif
+    return;
+  }
+
+  if (!data()) {
     throw std::runtime_error("Attempting to initialize invalid allocation.");
   }
 
@@ -902,7 +1435,14 @@ void DeviceAllocation::initialize_random_sparsemeta_device(int seed, int MetaSiz
 }
 
 void DeviceAllocation::initialize_random_sparsemeta_host(int seed, int MetaSizeInBits) {
-  if (!good()) {
+  if (!bytes()) {
+#ifndef NDEBUG
+    std::cout << "Skipping initialization of size 0 allocation\n";
+#endif
+    return;
+  }
+
+  if (!data()) {
     throw std::runtime_error("Attempting to initialize invalid allocation.");
   }
 
@@ -942,6 +1482,17 @@ bool DeviceAllocation::block_compare_equal(
   size_t capacity) {
 
   switch (numeric_type) {
+  case library::NumericTypeID::kFE4M3:
+    return reference::device::BlockCompareEqual<float_e4m3_t>(
+      reinterpret_cast<float_e4m3_t const *>(ptr_A), 
+      reinterpret_cast<float_e4m3_t const *>(ptr_B), 
+      capacity);
+    
+  case library::NumericTypeID::kFE5M2:
+    return reference::device::BlockCompareEqual<float_e5m2_t>(
+      reinterpret_cast<float_e5m2_t const *>(ptr_A),
+      reinterpret_cast<float_e5m2_t const *>(ptr_B), 
+      capacity);
   case library::NumericTypeID::kF16:
     return reference::device::BlockCompareEqual<half_t>(
       reinterpret_cast<half_t const *>(ptr_A), 
@@ -1081,7 +1632,7 @@ bool DeviceAllocation::block_compare_equal(
       capacity);
 
   default:
-    throw std::runtime_error("Unsupported numeric type");
+    throw std::runtime_error(std::string("Unsupported numeric type: ") + to_string(numeric_type));
   }
 }
 
@@ -1095,6 +1646,21 @@ bool DeviceAllocation::block_compare_relatively_equal(
   double nonzero_floor) {
 
   switch (numeric_type) {
+  case library::NumericTypeID::kFE4M3:
+    return reference::device::BlockCompareRelativelyEqual<float_e4m3_t>(
+      reinterpret_cast<float_e4m3_t const *>(ptr_A), 
+      reinterpret_cast<float_e4m3_t const *>(ptr_B),
+      capacity, 
+      static_cast<float_e4m3_t>(epsilon), 
+      static_cast<float_e4m3_t>(nonzero_floor));
+    
+  case library::NumericTypeID::kFE5M2:
+    return reference::device::BlockCompareRelativelyEqual<float_e5m2_t>(
+      reinterpret_cast<float_e5m2_t const *>(ptr_A), 
+      reinterpret_cast<float_e5m2_t const *>(ptr_B),
+      capacity, 
+      static_cast<float_e5m2_t>(epsilon), 
+      static_cast<float_e5m2_t>(nonzero_floor));
   case library::NumericTypeID::kF16:
     return reference::device::BlockCompareRelativelyEqual<half_t>(
       reinterpret_cast<half_t const *>(ptr_A), 
@@ -1430,6 +1996,13 @@ void DeviceAllocation::write_tensor_csv(
   std::ostream &out) {
 
   switch (this->type()) {
+  case library::NumericTypeID::kFE4M3:
+    write_tensor_csv_static_type<float_e4m3_t>(out, *this);
+    break;
+  
+  case library::NumericTypeID::kFE5M2:
+    write_tensor_csv_static_type<float_e5m2_t>(out, *this);
+    break;
   case library::NumericTypeID::kF16:
     write_tensor_csv_static_type<half_t>(out, *this);
     break;
@@ -1514,8 +2087,12 @@ void DeviceAllocation::write_tensor_csv(
     write_tensor_csv_static_type<cutlass::complex<double> >(out, *this);
     break;
 
+  case library::NumericTypeID::kVoid:
+    // Not dump anything as it is a empty tensor.
+    break;
+
   default:
-    throw std::runtime_error("Unsupported numeric type");
+    throw std::runtime_error(std::string("Unsupported numeric type: ") + to_string(this->type()) ) ;
   }
 }
 
@@ -1583,9 +2160,16 @@ static void tensor_fill(DeviceAllocation &allocation, Element val = Element()) {
 }
 
 /// Fills a tensor uniformly with a value (most frequently used to clear the tensor)
-void DeviceAllocation::fill(double val = 0.0) {
+void DeviceAllocation::fill_device(double val = 0.0) {
 
   switch (this->type()) {
+  case library::NumericTypeID::kFE4M3:
+    tensor_fill<float_e4m3_t>(*this, static_cast<float_e4m3_t>(val));
+    break;
+
+  case library::NumericTypeID::kFE5M2:
+    tensor_fill<float_e5m2_t>(*this, static_cast<float_e5m2_t>(val));
+    break;
   case library::NumericTypeID::kF16:
     tensor_fill<half_t>(*this, static_cast<half_t>(val));
     break;
@@ -1671,9 +2255,183 @@ void DeviceAllocation::fill(double val = 0.0) {
     break;
 
   default:
-    throw std::runtime_error("Unsupported numeric type");
+    throw std::runtime_error(std::string("Unsupported numeric type: ") + to_string(this->type()));
   }
 }
+
+/// Fills a tensor uniformly with a value (most frequently used to clear the tensor)
+void DeviceAllocation::fill_host(double val = 0.0) {
+
+  std::vector<uint8_t> host_data(bytes());
+
+  switch (this->type()) {
+  case library::NumericTypeID::kFE4M3:
+    cutlass::reference::host::BlockFill<float_e4m3_t>(
+      reinterpret_cast<float_e4m3_t *>(host_data.data()),
+      capacity_,
+      static_cast<float_e4m3_t>(val)
+    );
+    break;
+
+  case library::NumericTypeID::kFE5M2:
+    cutlass::reference::host::BlockFill<float_e5m2_t>(
+      reinterpret_cast<float_e5m2_t *>(host_data.data()),
+      capacity_,
+      static_cast<float_e5m2_t>(val)
+    );
+    break;
+
+  case library::NumericTypeID::kF16:
+    cutlass::reference::host::BlockFill<half_t>(
+      reinterpret_cast<half_t *>(host_data.data()),
+      capacity_,
+      static_cast<half_t>(val)
+    );
+    break;
+
+  case library::NumericTypeID::kBF16:
+    cutlass::reference::host::BlockFill<bfloat16_t>(
+      reinterpret_cast<bfloat16_t *>(host_data.data()),
+      capacity_,
+      static_cast<bfloat16_t>(val)
+    );
+    break;
+
+  case library::NumericTypeID::kTF32:
+    cutlass::reference::host::BlockFill<tfloat32_t>(
+      reinterpret_cast<tfloat32_t *>(host_data.data()),
+      capacity_,
+      static_cast<tfloat32_t>(val)
+    );
+    break;
+
+  case library::NumericTypeID::kF32:
+    cutlass::reference::host::BlockFill<float>(
+      reinterpret_cast<float *>(host_data.data()),
+      capacity_,
+      static_cast<float>(val)
+    );
+    break;
+
+  case library::NumericTypeID::kF64:
+    cutlass::reference::host::BlockFill<double>(
+      reinterpret_cast<double *>(host_data.data()),
+      capacity_,
+      static_cast<double>(val)
+    );
+    break;
+
+  case library::NumericTypeID::kS2:
+    cutlass::reference::host::BlockFill<int2b_t>(
+      reinterpret_cast<int2b_t *>(host_data.data()),
+      capacity_,
+      static_cast<int2b_t>(val)
+    );
+    break;
+
+  case library::NumericTypeID::kS4:
+    cutlass::reference::host::BlockFill<int4b_t>(
+      reinterpret_cast<int4b_t *>(host_data.data()),
+      capacity_,
+      static_cast<int4b_t>(val)
+    );
+    break;
+
+  case library::NumericTypeID::kS8:
+    cutlass::reference::host::BlockFill<int8_t>(
+      reinterpret_cast<int8_t *>(host_data.data()),
+      capacity_,
+      static_cast<int8_t>(val)
+    );
+    break;
+
+  case library::NumericTypeID::kS16:
+    cutlass::reference::host::BlockFill<int16_t>(
+      reinterpret_cast<int16_t *>(host_data.data()),
+      capacity_,
+      static_cast<int16_t>(val)
+    );
+    break;
+
+  case library::NumericTypeID::kS32:
+    cutlass::reference::host::BlockFill<int32_t>(
+      reinterpret_cast<int32_t *>(host_data.data()),
+      capacity_,
+      static_cast<int32_t>(val)
+    );
+    break;
+
+  case library::NumericTypeID::kS64:
+    cutlass::reference::host::BlockFill<int64_t>(
+      reinterpret_cast<int64_t *>(host_data.data()),
+      capacity_,
+      static_cast<int64_t>(val)
+    );
+    break;
+
+  case library::NumericTypeID::kB1:
+    cutlass::reference::host::BlockFill<uint1b_t>(
+      reinterpret_cast<uint1b_t *>(host_data.data()),
+      capacity_,
+      static_cast<uint1b_t>(val)
+    );
+    break;
+
+  case library::NumericTypeID::kU2:
+    cutlass::reference::host::BlockFill<uint2b_t>(
+      reinterpret_cast<uint2b_t *>(host_data.data()),
+      capacity_,
+      static_cast<uint2b_t>(val)
+    );
+    break;
+
+  case library::NumericTypeID::kU4:
+    cutlass::reference::host::BlockFill<uint4b_t>(
+      reinterpret_cast<uint4b_t *>(host_data.data()),
+      capacity_,
+      static_cast<uint4b_t>(val)
+    );
+    break;
+
+  case library::NumericTypeID::kU8:
+    cutlass::reference::host::BlockFill<uint8_t>(
+      reinterpret_cast<uint8_t *>(host_data.data()),
+      capacity_,
+      static_cast<uint8_t>(val)
+    );
+    break;
+
+  case library::NumericTypeID::kU16:
+    cutlass::reference::host::BlockFill<uint16_t>(
+      reinterpret_cast<uint16_t *>(host_data.data()),
+      capacity_,
+      static_cast<uint16_t>(val)
+    );
+    break;
+
+  case library::NumericTypeID::kU32:
+    cutlass::reference::host::BlockFill<uint32_t>(
+      reinterpret_cast<uint32_t *>(host_data.data()),
+      capacity_,
+      static_cast<uint32_t>(val)
+    );
+    break;
+
+  case library::NumericTypeID::kU64:
+    cutlass::reference::host::BlockFill<uint64_t>(
+      reinterpret_cast<uint64_t *>(host_data.data()),
+      capacity_,
+      static_cast<uint64_t>(val)
+    );
+    break;
+
+  default:
+    throw std::runtime_error(std::string("Unsupported numeric type: ") + to_string(this->type()));
+  }
+
+  copy_from_host(host_data.data());
+}
+
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 

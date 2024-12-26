@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,7 +35,7 @@
 
 #pragma once
 
-#include <cutlass/half.h>
+#include "cutlass/half.h"
 #include "cutlass/cutlass.h"
 #include "cutlass/numeric_types.h"
 #include "cutlass/array.h"
@@ -92,9 +92,9 @@ public:
 
     ElementCompute alpha;                  ///< scales accumulators
     ElementCompute beta;                   ///< scales source tensor
-    ElementCompute threshold;              ///< minimum value that is output 
     ElementCompute const *alpha_ptr;       ///< pointer to accumulator scalar - if not null, loads it from memory
     ElementCompute const *beta_ptr;        ///< pointer to source scalar - if not null, loads it from memory
+    ElementCompute threshold;              ///< minimum value that is output
     //
     // Methods
     //

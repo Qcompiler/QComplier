@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,20 +30,23 @@
  **************************************************************************************************/
 
 /*! \file
-    \brief 
+    \brief
 */
 
 #pragma once
 
 #include "cutlass/cutlass.h"
+
+#include "cutlass/arch/arch.h"
 #include "cutlass/fast_math.h"
-#include "cutlass/gemm/gemm.h"
 #include "cutlass/matrix_coord.h"
 #include "cutlass/complex.h"
 #include "cutlass/semaphore.h"
+#include "cutlass/gemm/kernel/gemm_universal.hpp"
 
 #include "cutlass/layout/matrix.h"
-
+#include "cutlass/gemm/gemm.h"
+#include "cutlass/gemm/kernel/params_universal_base.h"
 #include "cutlass/trace.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -55,11 +58,19 @@ namespace kernel {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 template <
-  typename Mma_,                  ///! Threadblock-scoped matrix multiply-accumulate 
+  typename Mma_,                  ///! Threadblock-scoped matrix multiply-accumulate
   typename Epilogue_,             ///! Epilogue
   typename ThreadblockSwizzle_    ///! Threadblock swizzling function
 >
-struct GemmUniversal {
+class GemmUniversal<
+  Mma_,
+  Epilogue_,
+  ThreadblockSwizzle_,
+  void,
+  // 3.x kernels use the first template argument to define the ProblemShape
+  // We use this invariant to SFINAE dispatch against either the 2.x API or the 3.x API
+  cute::enable_if_t<not (cute::is_tuple<Mma_>::value || IsCutlass3ArrayKernel<Mma_>::value)>
+> {
 public:
 
   using Mma = Mma_;
@@ -101,15 +112,11 @@ public:
   //
 
   /// Argument structure
-  struct Arguments {
-
+  struct Arguments : UniversalArgumentsBase
+  {
     //
     // Data members
     //
-
-    GemmUniversalMode mode;
-    GemmCoord problem_size;
-    int batch_count;
 
     typename EpilogueOutputOp::Params epilogue;
 
@@ -121,7 +128,6 @@ public:
     int64_t batch_stride_A;
     int64_t batch_stride_B;
     int64_t batch_stride_C;
-    int64_t batch_stride_D;
 
     typename LayoutA::Stride stride_a;
     typename LayoutB::Stride stride_b;
@@ -140,14 +146,13 @@ public:
     //
     // Methods
     //
-    
-    Arguments(): 
-      mode(GemmUniversalMode::kGemm), 
-      batch_count(1), 
+
+    Arguments():
       ptr_A(nullptr), ptr_B(nullptr), ptr_C(nullptr), ptr_D(nullptr),
       ptr_gather_A_indices(nullptr),
       ptr_gather_B_indices(nullptr),
-      ptr_scatter_D_indices(nullptr) {}
+      ptr_scatter_D_indices(nullptr)
+    {}
 
     /// constructs an arguments structure
     Arguments(
@@ -169,23 +174,22 @@ public:
       typename LayoutC::Stride stride_d,
       int const *ptr_gather_A_indices = nullptr,
       int const *ptr_gather_B_indices = nullptr,
-      int const *ptr_scatter_D_indices = nullptr
-    ):
-      mode(mode), 
-      problem_size(problem_size), 
-      batch_count(batch_count),
-      epilogue(epilogue), 
-      ptr_A(ptr_A), ptr_B(ptr_B), ptr_C(ptr_C), ptr_D(ptr_D), 
-      batch_stride_A(batch_stride_A), batch_stride_B(batch_stride_B), batch_stride_C(batch_stride_C), batch_stride_D(batch_stride_D), 
+      int const *ptr_scatter_D_indices = nullptr)
+    :
+      UniversalArgumentsBase(mode, problem_size, batch_count, batch_stride_D),
+      epilogue(epilogue),
+      ptr_A(ptr_A), ptr_B(ptr_B), ptr_C(ptr_C), ptr_D(ptr_D),
+      batch_stride_A(batch_stride_A), batch_stride_B(batch_stride_B), batch_stride_C(batch_stride_C),
       stride_a(stride_a), stride_b(stride_b), stride_c(stride_c), stride_d(stride_d),
       ptr_gather_A_indices(ptr_gather_A_indices), ptr_gather_B_indices(ptr_gather_B_indices),
-      ptr_scatter_D_indices(ptr_scatter_D_indices) {
+      ptr_scatter_D_indices(ptr_scatter_D_indices)
+    {
       lda = 0;
       ldb = 0;
       ldc = 0;
       ldd = 0;
       CUTLASS_TRACE_HOST("GemmUniversal::Arguments::Arguments() - problem_size: " << problem_size);
-      }
+    }
 
     /// constructs an arguments structure
     Arguments(
@@ -209,26 +213,26 @@ public:
       int const *ptr_gather_B_indices = nullptr,
       int const *ptr_scatter_D_indices = nullptr
     ):
-      mode(mode), 
-      problem_size(problem_size), 
-      batch_count(batch_count),
-      epilogue(epilogue), 
-      ptr_A(ptr_A), ptr_B(ptr_B), ptr_C(ptr_C), ptr_D(ptr_D), 
-      batch_stride_A(batch_stride_A), batch_stride_B(batch_stride_B), batch_stride_C(batch_stride_C), batch_stride_D(batch_stride_D),
+      UniversalArgumentsBase(mode, problem_size, batch_count, batch_stride_D),
+      epilogue(epilogue),
+      ptr_A(ptr_A), ptr_B(ptr_B), ptr_C(ptr_C), ptr_D(ptr_D),
+      batch_stride_A(batch_stride_A), batch_stride_B(batch_stride_B), batch_stride_C(batch_stride_C),
       lda(lda), ldb(ldb), ldc(ldc), ldd(ldd),
       ptr_gather_A_indices(ptr_gather_A_indices), ptr_gather_B_indices(ptr_gather_B_indices),
-      ptr_scatter_D_indices(ptr_scatter_D_indices) {
+      ptr_scatter_D_indices(ptr_scatter_D_indices)
+    {
       stride_a = make_Coord(lda);
       stride_b = make_Coord(ldb);
       stride_c = make_Coord(ldc);
       stride_d = make_Coord(ldd);
       CUTLASS_TRACE_HOST("GemmUniversal::Arguments::Arguments() - problem_size: " << problem_size);
-      }
+    }
 
     /// Returns arguments for the transposed problem
-    Arguments transposed_problem() const {
+    Arguments transposed_problem() const
+    {
       Arguments args(*this);
-      
+
       std::swap(args.problem_size.m(), args.problem_size.n());
       std::swap(args.ptr_A, args.ptr_B);
       std::swap(args.lda, args.ldb);
@@ -240,27 +244,40 @@ public:
     }
   };
 
+
   //
   // Structure for precomputing values in host memory and passing to kernels
   //
 
   /// Parameters structure
-  struct Params {
+  struct Params : UniversalParamsBase<
+    ThreadblockSwizzle,
+    ThreadblockShape,
+    ElementA,
+    ElementB,
+    ElementC,
+    LayoutA,
+    LayoutB>
+  {
+    using ParamsBase = UniversalParamsBase<
+      ThreadblockSwizzle,
+      ThreadblockShape,
+      ElementA,
+      ElementB,
+      ElementC,
+      LayoutA,
+      LayoutB>;
 
-    cutlass::gemm::GemmCoord problem_size;
-    cutlass::gemm::GemmCoord grid_tiled_shape;
-    int swizzle_log_tile;
-    
+    //
+    // Data members
+    //
+
     typename Mma::IteratorA::Params params_A;
     typename Mma::IteratorB::Params params_B;
     typename Epilogue::OutputTileIterator::Params params_C;
     typename Epilogue::OutputTileIterator::Params params_D;
-    
-    typename EpilogueOutputOp::Params output_op;
 
-    GemmUniversalMode mode;
-    int batch_count;
-    int gemm_k_size;
+    typename EpilogueOutputOp::Params output_op;
 
     void * ptr_A;
     void * ptr_B;
@@ -270,59 +287,30 @@ public:
     int64_t batch_stride_A;
     int64_t batch_stride_B;
     int64_t batch_stride_C;
-    int64_t batch_stride_D;
 
     int * ptr_gather_A_indices;
     int * ptr_gather_B_indices;
     int * ptr_scatter_D_indices;
 
-    int *semaphore;
-
     //
-    // Methods
+    // Host dispatch API
     //
 
-    CUTLASS_HOST_DEVICE
-    Params():
-      swizzle_log_tile(0),
-      params_A(0),
-      params_B(0),
-      params_C(0),
-      params_D(0),
-      batch_count(0),
-      gemm_k_size(0),
-      mode(cutlass::gemm::GemmUniversalMode::kGemm),
-      ptr_A(nullptr),
-      ptr_B(nullptr),
-      ptr_C(nullptr),
-      ptr_D(nullptr),
-      batch_stride_A(0),
-      batch_stride_B(0),
-      batch_stride_C(0),
-      batch_stride_D(0),
-      ptr_gather_A_indices(nullptr),
-      ptr_gather_B_indices(nullptr),
-      ptr_scatter_D_indices(nullptr),
-      semaphore(nullptr) { }
+    /// Default constructor
+    Params() = default;
 
-    CUTLASS_HOST_DEVICE
+    /// Constructor
     Params(
-      Arguments const &args,
-      cutlass::gemm::GemmCoord const & grid_tiled_shape,
-      int gemm_k_size,
-      void *workspace = nullptr
-    ):
-      problem_size(args.problem_size),
-      grid_tiled_shape(grid_tiled_shape),
-      swizzle_log_tile(ThreadblockSwizzle().get_log_tile(grid_tiled_shape)),
+      Arguments const &args,  /// GEMM application arguments
+      int device_sms,         /// Number of SMs on the device
+      int sm_occupancy)       /// Kernel SM occupancy (in thread blocks)
+    :
+      ParamsBase(args, device_sms, sm_occupancy),
       params_A(args.lda ? make_Coord_with_padding<LayoutA::kStrideRank>(args.lda) : args.stride_a),
       params_B(args.ldb ? make_Coord_with_padding<LayoutB::kStrideRank>(args.ldb) : args.stride_b),
       params_C(args.ldc ? make_Coord_with_padding<LayoutC::kStrideRank>(args.ldc) : args.stride_c),
       params_D(args.ldd ? make_Coord_with_padding<LayoutC::kStrideRank>(args.ldd) : args.stride_d),
       output_op(args.epilogue),
-      mode(args.mode),
-      batch_count(args.batch_count),
-      gemm_k_size(gemm_k_size),
       ptr_A(const_cast<void *>(args.ptr_A)),
       ptr_B(const_cast<void *>(args.ptr_B)),
       ptr_C(const_cast<void *>(args.ptr_C)),
@@ -330,38 +318,34 @@ public:
       batch_stride_A(args.batch_stride_A),
       batch_stride_B(args.batch_stride_B),
       batch_stride_C(args.batch_stride_C),
-      batch_stride_D(args.batch_stride_D),
       ptr_gather_A_indices(const_cast<int *>(args.ptr_gather_A_indices)),
       ptr_gather_B_indices(const_cast<int *>(args.ptr_gather_B_indices)),
-      ptr_scatter_D_indices(const_cast<int *>(args.ptr_scatter_D_indices)),
-      semaphore(static_cast<int *>(workspace)) {
+      ptr_scatter_D_indices(const_cast<int *>(args.ptr_scatter_D_indices))
+    {}
 
-    }
+    /// Lightweight update given a subset of arguments.
+    void update(Arguments const &args)
+    {
+      CUTLASS_TRACE_HOST("GemmUniversal::Params::update()");
 
-    CUTLASS_HOST_DEVICE
-    void update(
-      Arguments const &args,
-      void *workspace = nullptr) {
-
+      // Update input/output pointers
       ptr_A = const_cast<void *>(args.ptr_A);
       ptr_B = const_cast<void *>(args.ptr_B);
       ptr_C = const_cast<void *>(args.ptr_C);
       ptr_D = args.ptr_D;
 
+      batch_stride_A = args.batch_stride_A;
+      batch_stride_B = args.batch_stride_B;
+      batch_stride_C = args.batch_stride_C;
+      this->batch_stride_D = args.batch_stride_D;
+
       ptr_gather_A_indices = const_cast<int *>(args.ptr_gather_A_indices);
       ptr_gather_B_indices = const_cast<int *>(args.ptr_gather_B_indices);
       ptr_scatter_D_indices = const_cast<int *>(args.ptr_scatter_D_indices);
 
-      batch_stride_A = args.batch_stride_A;
-      batch_stride_B = args.batch_stride_B;
-      batch_stride_C = args.batch_stride_C;
-      batch_stride_D = args.batch_stride_D;
-
       output_op = args.epilogue;
-      
-      semaphore = static_cast<int *>(workspace);
-      CUTLASS_TRACE_HOST("GemmUniversal::Params::update()");
     }
+
   };
 
   /// Shared memory storage structure
@@ -370,39 +354,37 @@ public:
     typename Epilogue::SharedStorage epilogue;
   };
 
+
 public:
 
   //
-  // Methods
+  // Host dispatch API
   //
-
-  CUTLASS_DEVICE
-  GemmUniversal() { } 
 
   /// Determines whether kernel satisfies alignment
   static Status can_implement(
-    cutlass::gemm::GemmCoord const & problem_size) {
-
+    cutlass::gemm::GemmCoord const & problem_size)
+  {
     CUTLASS_TRACE_HOST("GemmUniversal::can_implement()");
 
-    static int const kAlignmentA = (platform::is_same<LayoutA,
+    static int const kAlignmentA = (cute::is_same<LayoutA,
                                                       layout::ColumnMajorInterleaved<32>>::value)
                                    ? 32
-                                   : (platform::is_same<LayoutA,
+                                   : (cute::is_same<LayoutA,
                                                         layout::ColumnMajorInterleaved<64>>::value)
                                      ? 64
                                      : Mma::IteratorA::AccessType::kElements;
-    static int const kAlignmentB = (platform::is_same<LayoutB,
+    static int const kAlignmentB = (cute::is_same<LayoutB,
                                                       layout::RowMajorInterleaved<32>>::value)
                                    ? 32
-                                   : (platform::is_same<LayoutB,
+                                   : (cute::is_same<LayoutB,
                                                         layout::RowMajorInterleaved<64>>::value)
                                      ? 64
                                      : Mma::IteratorB::AccessType::kElements;
-    static int const kAlignmentC = (platform::is_same<LayoutC,
+    static int const kAlignmentC = (cute::is_same<LayoutC,
                                                       layout::ColumnMajorInterleaved<32>>::value)
                                    ? 32
-                                   : (platform::is_same<LayoutC,
+                                   : (cute::is_same<LayoutC,
                                                         layout::ColumnMajorInterleaved<64>>::value)
                                      ? 64
                                      : Epilogue::OutputTileIterator::kElementsPerAccess;
@@ -411,30 +393,30 @@ public:
     bool isBMisaligned = false;
     bool isCMisaligned = false;
 
-    if (platform::is_same<LayoutA, layout::RowMajor>::value) {
+    if (cute::is_same<LayoutA, layout::RowMajor>::value) {
       isAMisaligned = problem_size.k() % kAlignmentA;
-    } else if (platform::is_same<LayoutA, layout::ColumnMajor>::value) {
+    } else if (cute::is_same<LayoutA, layout::ColumnMajor>::value) {
       isAMisaligned = problem_size.m() % kAlignmentA;
-    } else if (platform::is_same<LayoutA, layout::ColumnMajorInterleaved<32>>::value
-            || platform::is_same<LayoutA, layout::ColumnMajorInterleaved<64>>::value) {
+    } else if (cute::is_same<LayoutA, layout::ColumnMajorInterleaved<32>>::value
+            || cute::is_same<LayoutA, layout::ColumnMajorInterleaved<64>>::value) {
       isAMisaligned = problem_size.k() % kAlignmentA;
     }
 
-    if (platform::is_same<LayoutB, layout::RowMajor>::value) {
+    if (cute::is_same<LayoutB, layout::RowMajor>::value) {
       isBMisaligned = problem_size.n() % kAlignmentB;
-    } else if (platform::is_same<LayoutB, layout::ColumnMajor>::value) {
+    } else if (cute::is_same<LayoutB, layout::ColumnMajor>::value) {
       isBMisaligned = problem_size.k() % kAlignmentB;
-    } else if (platform::is_same<LayoutB, layout::RowMajorInterleaved<32>>::value
-            || platform::is_same<LayoutB, layout::RowMajorInterleaved<64>>::value) {
+    } else if (cute::is_same<LayoutB, layout::RowMajorInterleaved<32>>::value
+            || cute::is_same<LayoutB, layout::RowMajorInterleaved<64>>::value) {
       isBMisaligned = problem_size.k() % kAlignmentB;
     }
 
-    if (platform::is_same<LayoutC, layout::RowMajor>::value) {
+    if (cute::is_same<LayoutC, layout::RowMajor>::value) {
       isCMisaligned = problem_size.n() % kAlignmentC;
-    } else if (platform::is_same<LayoutC, layout::ColumnMajor>::value) {
+    } else if (cute::is_same<LayoutC, layout::ColumnMajor>::value) {
       isCMisaligned = problem_size.m() % kAlignmentC;
-    } else if (platform::is_same<LayoutC, layout::ColumnMajorInterleaved<32>>::value
-            || platform::is_same<LayoutC, layout::ColumnMajorInterleaved<64>>::value) {
+    } else if (cute::is_same<LayoutC, layout::ColumnMajorInterleaved<32>>::value
+            || cute::is_same<LayoutC, layout::ColumnMajorInterleaved<64>>::value) {
       isCMisaligned = problem_size.n() % kAlignmentC;
     }
 
@@ -462,18 +444,34 @@ public:
     return can_implement(args.problem_size);
   }
 
-  static size_t get_extra_workspace_size(Arguments const &args,
-                                         cutlass::gemm::GemmCoord const &grid_tiled_shape) {
 
-    return 0;
+public:
+
+  //
+  // Device-only API
+  //
+
+  // Factory invocation
+  CUTLASS_DEVICE
+  static void invoke(
+    Params const &params,
+    SharedStorage &shared_storage)
+  {
+    GemmUniversal op;
+    op(params, shared_storage);
   }
- 
+
+
   /// Executes one GEMM
   CUTLASS_DEVICE
   void operator()(Params const &params, SharedStorage &shared_storage) {
-
-    // Compute threadblock location
     ThreadblockSwizzle threadblock_swizzle;
+    run_with_swizzle(params, shared_storage, threadblock_swizzle);
+  }
+
+  /// Executes one GEMM with an externally-provided swizzling function
+  CUTLASS_DEVICE
+  void run_with_swizzle(Params const &params, SharedStorage &shared_storage, ThreadblockSwizzle& threadblock_swizzle) {
 
     cutlass::gemm::GemmCoord threadblock_tile_offset =
         threadblock_swizzle.get_tile_offset(params.swizzle_log_tile);
@@ -488,18 +486,18 @@ public:
     int offset_k = 0;
     int problem_size_k = params.problem_size.k();
 
-    ElementA *ptr_A = static_cast<ElementA *>(params.ptr_A); 
+    ElementA *ptr_A = static_cast<ElementA *>(params.ptr_A);
     ElementB *ptr_B = static_cast<ElementB *>(params.ptr_B);
 
     //
     // Fetch pointers based on mode.
     //
-    if (params.mode == GemmUniversalMode::kGemm || 
+    if (params.mode == GemmUniversalMode::kGemm ||
       params.mode == GemmUniversalMode::kGemmSplitKParallel) {
 
       if (threadblock_tile_offset.k() + 1 < params.grid_tiled_shape.k()) {
 
-        problem_size_k = (threadblock_tile_offset.k() + 1) * params.gemm_k_size; 
+        problem_size_k = (threadblock_tile_offset.k() + 1) * params.gemm_k_size;
       }
 
       offset_k = threadblock_tile_offset.k() * params.gemm_k_size;
@@ -548,7 +546,7 @@ public:
 
     // Broadcast the warp_id computed by lane 0 to ensure dependent code
     // is compiled as warp-uniform.
-    int warp_idx = __shfl_sync(0xffffffff, threadIdx.x / 32, 0);
+    int warp_idx = canonical_warp_idx_sync();
 
     int lane_idx = threadIdx.x % 32;
 
@@ -568,10 +566,10 @@ public:
 
     // Compute threadblock-scoped matrix multiply-add
     mma(
-      gemm_k_iterations, 
-      accumulators, 
-      iterator_A, 
-      iterator_B, 
+      gemm_k_iterations,
+      accumulators,
+      iterator_A,
+      iterator_B,
       accumulators);
 
     //
@@ -594,13 +592,13 @@ public:
 
     int block_idx = threadblock_tile_offset.m() + threadblock_tile_offset.n() * params.grid_tiled_shape.m();
 
-    ElementC *ptr_C = static_cast<ElementC *>(params.ptr_C); 
+    ElementC *ptr_C = static_cast<ElementC *>(params.ptr_C);
     ElementC *ptr_D = static_cast<ElementC *>(params.ptr_D);
 
     //
     // Fetch pointers based on mode.
     //
-    
+
     // Construct the semaphore.
     Semaphore semaphore(params.semaphore + block_idx, thread_idx);
 
@@ -608,7 +606,7 @@ public:
 
       // If performing a reduction via split-K, fetch the initial synchronization
       if (params.grid_tiled_shape.k() > 1) {
-        
+
         // Fetch the synchronization lock initially but do not block.
         semaphore.fetch();
 
@@ -649,14 +647,14 @@ public:
     );
 
     Epilogue epilogue(
-      shared_storage.epilogue, 
-      thread_idx, 
-      warp_idx, 
+      shared_storage.epilogue,
+      thread_idx,
+      warp_idx,
       lane_idx);
 
     // Wait on the semaphore - this latency may have been covered by iterator construction
     if (params.mode == GemmUniversalMode::kGemm && params.grid_tiled_shape.k() > 1) {
-        
+
       // For subsequent threadblocks, the source matrix is held in the 'D' tensor.
       if (threadblock_tile_offset.k()) {
         iterator_C = iterator_D;
@@ -668,16 +666,16 @@ public:
 
     // Execute the epilogue operator to update the destination tensor.
     epilogue(
-      output_op, 
-      iterator_D, 
-      accumulators, 
-      iterator_C); 
-    
+      output_op,
+      iterator_D,
+      accumulators,
+      iterator_C);
+
     //
     // Release the semaphore
     //
 
-    if (params.mode == GemmUniversalMode::kGemm && params.grid_tiled_shape.k() > 1) { 
+    if (params.mode == GemmUniversalMode::kGemm && params.grid_tiled_shape.k() > 1) {
 
       int lock = 0;
       if (params.grid_tiled_shape.k() == threadblock_tile_offset.k() + 1) {
@@ -689,7 +687,7 @@ public:
         // Otherwise, the semaphore is incremented
         lock = threadblock_tile_offset.k() + 1;
       }
-      
+
       semaphore.release(lock);
     }
   }

@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -241,8 +241,6 @@ struct SparseTestbed {
     // Determine SMEM requirements and waive if not satisfied
     //
 
-    int smem_size = int(sizeof(typename Mma::SharedStorage));
-
     cudaDeviceProp properties;
     int device_idx;
     cudaError_t result = cudaGetDevice(&device_idx);
@@ -255,10 +253,6 @@ struct SparseTestbed {
 
     if (result != cudaSuccess) {
       throw std::runtime_error("cudaGetDeviceProperties() failed");
-    }
-
-    if (properties.sharedMemPerMultiprocessor < smem_size) {
-      return false;
     }
 
     return true;
@@ -302,7 +296,6 @@ struct SparseTestbed {
     } else if (init_A == cutlass::Distribution::Identity) {
       cutlass::reference::host::TensorFillIdentity(matrix_A.host_view());
     } else {
-      // TODO: Implement the rest
       return false;
     }
 
@@ -328,7 +321,6 @@ struct SparseTestbed {
     } else if (init_B == cutlass::Distribution::Identity) {
       cutlass::reference::host::TensorFillIdentity(matrix_B.host_view());
     } else {
-      // TODO: Implement the rest
       return false;
     }
 
@@ -345,7 +337,6 @@ struct SparseTestbed {
       cutlass::reference::host::TensorFill(matrix_E.host_view(),
                                            (ElementE)(content));
     } else {
-      // TODO: Implement the rest
       return false;
     }
 
@@ -415,7 +406,12 @@ struct SparseTestbed {
     bool passed = cutlass::reference::host::TensorEquals(
         matrix_C_computed.host_view(), matrix_C_reference.host_view());
 
-    EXPECT_TRUE(passed)
+    EXPECT_TRUE(passed);
+
+    if (!passed && CUTLASS_TEST_UNIT_ENABLE_WARNINGS) {
+
+      std::cout
+        << __FILE__ << ":" << __LINE__ << "  "
         << "A:\n" << matrix_A.host_view() << "\n"
         << "B:\n" << matrix_B.host_view() << "\n"
         << "E:\n" << matrix_E.host_view() << "\n"
@@ -423,6 +419,7 @@ struct SparseTestbed {
         << matrix_C_reference.host_view() << "\n"
         << "Computed:\n"
         << matrix_C_computed.host_view() << "\n";
+    }
 
     EXPECT_GT(cutlass::reference::host::TensorNorm(matrix_C_reference.host_view()), 0);
     EXPECT_GT(cutlass::reference::host::TensorNorm(matrix_C_computed.host_view()), 0);

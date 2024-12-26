@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,10 +30,10 @@
  **************************************************************************************************/
 
 /*! \file
-    \brief 
+    \brief
       Default kernel-level GEMM definitions combine threadblock-scoped matrix multiply-add with
       the appropriate threadblock-scoped epilogue.
-  
+
       Note, CUTLASS epilogues universally target row-major outputs. Column-major outputs are
       accommodated by exchanging A and B operands and assuming transposed layouts. Partial
       specializations here choose 'device::GemmTransposed' to implement this functionality.
@@ -49,6 +49,7 @@
 #include "cutlass/numeric_types.h"
 
 #include "cutlass/gemm/kernel/gemm_universal.h"
+#include "cutlass/gemm/kernel/gemm_universal_streamk.h"
 #include "cutlass/gemm/kernel/default_gemm.h"
 #include "cutlass/gemm/kernel/default_gemm_complex.h"
 
@@ -93,7 +94,7 @@ template <
     typename ThreadblockShape,
     /// Warp-level tile size (concept: GemmShape)
     typename WarpShape,
-    /// Warp-level tile size (concept: GemmShape)
+    /// Instruction tile size (concept: GemmShape)
     typename InstructionShape,
     /// Epilogue output operator
     typename EpilogueOutputOp,
@@ -113,6 +114,10 @@ template <
     bool ScatterD = false,
     /// Permute result D
     typename PermuteDLayout = layout::NoPermute,
+    /// Permute operand A
+    typename PermuteALayout_ = layout::NoPermute,
+    /// Permute operand B
+    typename PermuteBLayout_ = layout::NoPermute,
     ///
     typename Enable = void
     >
@@ -169,7 +174,11 @@ template <
     /// Scatter result D by using an index array
     bool ScatterD,
     /// Permute result D
-    typename PermuteDLayout
+    typename PermuteDLayout,
+    /// Permute operand A
+    typename PermuteALayout,
+    /// Permute operand B
+    typename PermuteBLayout
 >
 struct DefaultGemmUniversal<
   ElementA,
@@ -197,6 +206,8 @@ struct DefaultGemmUniversal<
   GatherB,
   ScatterD,
   PermuteDLayout,
+  PermuteALayout,
+  PermuteBLayout,
   typename platform::enable_if< ! cutlass::is_complex<ElementAccumulator>::value>::type
 > {
 
@@ -224,15 +235,31 @@ struct DefaultGemmUniversal<
     GatherA,
     GatherB,
     ScatterD,
-    PermuteDLayout
+    PermuteDLayout,
+    PermuteALayout,
+    PermuteBLayout
   >::GemmKernel;
 
-    /// Define the kernel in terms of the default kernel
-  using GemmKernel = kernel::GemmUniversal<
-    typename DefaultGemmKernel::Mma,
-    typename DefaultGemmKernel::Epilogue,
-    ThreadblockSwizzle
-  >;
+  /// Universal kernel without StreamkFeature member type
+  template <class SwizzleT, class Enable = void>
+  class SelectBase :
+    public kernel::GemmUniversal<
+      typename DefaultGemmKernel::Mma,
+      typename DefaultGemmKernel::Epilogue,
+      SwizzleT>
+  {};
+
+  /// Universal kernel with StreamkFeature member type
+  template <class SwizzleT>
+  class SelectBase<SwizzleT, typename SwizzleT::StreamkFeature> :
+    public kernel::GemmUniversalStreamk<
+      typename DefaultGemmKernel::Mma,
+      typename DefaultGemmKernel::Epilogue,
+      SwizzleT>
+  {};
+
+  /// Select kernel by ThreadblockSwizzle's support for StreamkFeature
+  using GemmKernel = SelectBase<ThreadblockSwizzle>;
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -311,6 +338,8 @@ struct DefaultGemmUniversal<
   false,
   false,
   layout::NoPermute,
+  layout::NoPermute,
+  layout::NoPermute,
   typename platform::enable_if<cutlass::is_complex<ElementAccumulator>::value>::type
 > {
 
@@ -336,12 +365,26 @@ struct DefaultGemmUniversal<
     false
   >::GemmKernel;
 
-  /// Define the kernel in terms of the default kernel
-  using GemmKernel = kernel::GemmUniversal<
-    typename DefaultGemmKernel::Mma,
-    typename DefaultGemmKernel::Epilogue, 
-    ThreadblockSwizzle
-  >;
+  /// Universal kernel without StreamkFeature member type
+  template <class SwizzleT, class Enable = void>
+  class SelectBase :
+    public kernel::GemmUniversal<
+      typename DefaultGemmKernel::Mma,
+      typename DefaultGemmKernel::Epilogue,
+      SwizzleT>
+  {};
+
+  /// Universal kernel with StreamkFeature member type
+  template <class SwizzleT>
+  class SelectBase<SwizzleT, typename SwizzleT::StreamkFeature> :
+    public kernel::GemmUniversalStreamk<
+      typename DefaultGemmKernel::Mma,
+      typename DefaultGemmKernel::Epilogue,
+      SwizzleT>
+  {};
+
+  /// Select kernel by ThreadblockSwizzle's support for StreamkFeature
+  using GemmKernel = SelectBase<ThreadblockSwizzle>;
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////////////

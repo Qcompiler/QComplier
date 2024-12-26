@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -78,7 +78,7 @@ TEST(SM80_Device_Syrk_f32n_f32t_l_tensor_op_fast_f32, 128x256x32_64x64x32) {
       ElementAccumulator
     >,
     cutlass::gemm::threadblock::GemmIdentityThreadblockSwizzle<>,
-    4
+    3 
   >;
 
   EXPECT_TRUE(test::gemm::device::TestAllRankKUniversal<RankK>());

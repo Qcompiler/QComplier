@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -266,7 +266,7 @@ public:
               << operator_args.partitions << std::endl 
               << "  partition_stride: " 
               << operator_args.partition_stride << std::endl
-              << "  epilouge (alpha, beta): " 
+              << "  epilogue (alpha, beta): "
               << operator_args.output.alpha << ", " 
               << operator_args.output.beta << std::endl
               << "  workspace (ptr, stride): "

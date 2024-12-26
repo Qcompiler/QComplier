@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -134,6 +134,12 @@ public:
     /// Number of cp.async instructions to load on group of operand B
     static int const kAccessesPerGroupB =
         (AsyncCopyIterationsPerStageB + Base::kWarpGemmIterations - 1) / Base::kWarpGemmIterations;
+
+    // Optional staged-accumulation (e.g., tf32x3 kernels) for improved numerical
+    // accuracy, where each mainloop iteration first accumulates into a temporary
+    // set of freshly-cleared accumulators, which are subsequently added to the
+    // final accumulator set.
+    static bool const kStagedAccumulation = arch::detail::UseStagedAccumulation<Operator>::value;
   };
 
  private:
@@ -387,10 +393,7 @@ public:
 
     FragmentC tmp_accum;
 
-    if (platform::is_same<typename Operator::MathOperator,
-                          arch::OpMultiplyAddFastF32>::value
-      || platform::is_same<typename Operator::MathOperator,
-                           arch::OpMultiplyAddComplexFastF32>::value) {
+    if (Detail::kStagedAccumulation) {
       tmp_accum.clear();
     }
 
@@ -444,10 +447,7 @@ public:
         copy_tiles_and_advance(iterator_A, iterator_B, group_start_iteration_A,
                                group_start_iteration_B);
 
-        if (platform::is_same<typename Operator::MathOperator,
-                              arch::OpMultiplyAddFastF32>::value
-          || platform::is_same<typename Operator::MathOperator,
-                               arch::OpMultiplyAddComplexFastF32>::value) {
+        if (Detail::kStagedAccumulation) {
           warp_mma(
             tmp_accum, 
             warp_transformed_frag_A[warp_mma_k % 2],
@@ -518,10 +518,7 @@ public:
 
     }
 
-    if (platform::is_same<typename Operator::MathOperator,
-                          arch::OpMultiplyAddFastF32>::value
-      || platform::is_same<typename Operator::MathOperator,
-                           arch::OpMultiplyAddComplexFastF32>::value) {
+    if (Detail::kStagedAccumulation) {
       accum = plus_accum(accum, tmp_accum); 
     }
   

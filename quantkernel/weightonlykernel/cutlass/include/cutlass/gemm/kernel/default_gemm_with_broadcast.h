@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -114,14 +114,14 @@ struct DefaultGemmWithBroadcast {
     Operator
   >::GemmKernel;
 
-  // Replace epilogue
+  // Define epilogue
   using Epilogue = typename cutlass::epilogue::threadblock::DefaultEpilogueWithBroadcastTensorOp<
     typename GemmBase::Epilogue::Shape,
     typename GemmBase::Epilogue::WarpMmaOperator,
     GemmBase::Epilogue::kPartitionsK,
     ElementC_,
     typename EpilogueOutputOp::ElementT,
-    ElementC_,
+    typename EpilogueOutputOp::ElementVector,
     EpilogueOutputOp,
     GemmBase::Epilogue::kElementsPerAccess
   >::Epilogue;
@@ -137,7 +137,7 @@ struct DefaultGemmWithBroadcast {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Parital specialization: ArchTag = cutlass::arch::Sm70
+/// Partial specialization: ArchTag = cutlass::arch::Sm70
 ///
 ///
 template <
@@ -214,14 +214,14 @@ struct DefaultGemmWithBroadcast<
     Operator
   >::GemmKernel;
 
-  // Replace epilogue
+  // Define epilogue
   using Epilogue = typename cutlass::epilogue::threadblock::DefaultEpilogueWithBroadcastVoltaTensorOp<
     typename GemmBase::Epilogue::Shape,
     typename GemmBase::Epilogue::WarpMmaOperator,
     GemmBase::Epilogue::kPartitionsK,
     ElementC_,
     typename EpilogueOutputOp::ElementT,
-    ElementC_,
+    typename EpilogueOutputOp::ElementVector,
     EpilogueOutputOp,
     GemmBase::Epilogue::kElementsPerAccess
   >::Epilogue;

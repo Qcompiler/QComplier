@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -117,7 +117,7 @@ struct DefaultGemmWithReduction {
     SharedMemoryClearOption::kClearLastStage
   >::GemmKernel;
 
-  // Replace epilogue
+  // Define epilogue
   using Epilogue = typename cutlass::epilogue::threadblock::DefaultEpilogueWithReductionTensorOp<
     typename GemmBase::Epilogue::Shape,
     typename GemmBase::Epilogue::WarpMmaOperator,
@@ -138,7 +138,7 @@ struct DefaultGemmWithReduction {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-/// Parital specialization: ArchTag = cutlass::arch::Sm70
+/// Partial specialization: ArchTag = cutlass::arch::Sm70
 ///
 ///
 template <
@@ -218,7 +218,7 @@ struct DefaultGemmWithReduction<
     Operator
   >::GemmKernel;
 
-  // Replace epilogue
+  // Define epilogue
   using Epilogue = typename cutlass::epilogue::threadblock::DefaultEpilogueWithReductionVoltaTensorOp<
     typename GemmBase::Epilogue::Shape,
     typename GemmBase::Epilogue::WarpMmaOperator,

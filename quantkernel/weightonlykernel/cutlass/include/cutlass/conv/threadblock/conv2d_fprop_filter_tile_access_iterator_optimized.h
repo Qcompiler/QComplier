@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -67,7 +67,8 @@ template <
   typename Element_,
   typename Layout_,
   typename ThreadMap_,
-  typename AccessType_ = cutlass::AlignedArray<Element_, ThreadMap_::kElementsPerAccess>
+  typename AccessType_ = cutlass::AlignedArray<Element_, ThreadMap_::kElementsPerAccess>,
+  bool IsDeconv_ = false
 >
 class Conv2dFpropFilterTileAccessIteratorOptimized{
 public:
@@ -85,6 +86,7 @@ public:
   using TensorCoord = typename Layout::TensorCoord;
   using Index = typename Layout::Index;
   using LongIndex = typename Layout::LongIndex;
+  static bool const IsDeconv = IsDeconv_;
   static IteratorAlgorithm const kIteratorAlgorithm = conv::IteratorAlgorithm::kOptimized;
   static StrideSupport const kStrideSupport = conv::StrideSupport::kStrided;
   static int const kConvDim = 2;
@@ -145,6 +147,7 @@ private:
   uint32_t predicates_[kAccessesPerVector];
   int filter_rs_;
   int filter_c_;
+  int channels_per_group_;
 
   //
   // Assertions
@@ -175,10 +178,11 @@ public:
 
     filter_c_ = threadblock_offset.row() + thread_coord.contiguous();
     Index column = threadblock_offset.column() + thread_coord.strided();
+    channels_per_group_ = (IsDeconv ? problem_size_.K : problem_size_.C) / problem_size_.groups;
 
     CUTLASS_PRAGMA_UNROLL
     for (int s = 0; s < ThreadMap::Iterations::kStrided; ++s) {
-      uint32_t pred = ((column + s * ThreadMap::Delta::kStrided < problem_size_.K) ? 1u : 0);
+      uint32_t pred = ((column + s * ThreadMap::Delta::kStrided < (IsDeconv ? problem_size_.C : problem_size_.K)) ? 1u : 0);
 
       CUTLASS_PRAGMA_UNROLL
       for (int v_idx = 0; v_idx < kAccessesPerVector; ++v_idx) {
@@ -188,7 +192,7 @@ public:
 
     CUTLASS_PRAGMA_UNROLL
     for (int v_idx = 0; v_idx < kAccessesPerVector; ++v_idx) {
-      clear_mask(v_idx, filter_c_ + v_idx * AccessType::kElements >= problem_size_.C);
+      clear_mask(v_idx, filter_c_ + v_idx * AccessType::kElements >= channels_per_group_);
     }
 
     pointer_ += (
@@ -229,7 +233,7 @@ public:
  
     CUTLASS_PRAGMA_UNROLL
     for (int v_idx = 0; v_idx < kAccessesPerVector; ++v_idx) {
-      clear_mask(v_idx, filter_c_ + v_idx * AccessType::kElements >= problem_size_.C);
+      clear_mask(v_idx, filter_c_ + v_idx * AccessType::kElements >= channels_per_group_);
     }
       
     pointer_ += next;
@@ -285,19 +289,22 @@ public:
   CUTLASS_HOST_DEVICE
   static Status can_implement(Conv2dProblemSize const &problem_size) {
 
+    auto input_channels = (IsDeconv ? problem_size.K : problem_size.C);
+    auto output_channels = (IsDeconv ? problem_size.C : problem_size.K);
+
     // check alignment constraint on iterator's contiguous dimension
-    if (problem_size.C % AccessType::kElements) {
+    if ((input_channels / problem_size.groups) % AccessType::kElements) {
       return Status::kErrorInvalidProblem;
     }
 
     if (platform::is_same<Layout, layout::TensorCxRSKx<32>>::value) {
-      if (problem_size.K % 32) {
+      if (output_channels % 32) {
         return Status::kErrorInvalidProblem;
       }
     }
 
     if (platform::is_same<Layout, layout::TensorCxRSKx<64>>::value) {
-      if (problem_size.K % 64) {
+      if (output_channels % 64) {
         return Status::kErrorInvalidProblem;
       }
     }

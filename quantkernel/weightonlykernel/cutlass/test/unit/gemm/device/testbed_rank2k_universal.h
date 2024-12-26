@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -64,6 +64,9 @@ namespace device {
 template <typename Rank2K>
 struct TestbedRank2KUniversal {
 
+  using ElementA = typename Rank2K::ElementA;
+  using ElementB = typename Rank2K::ElementB;
+  using ElementC = typename Rank2K::ElementC;
   using ElementAccumulator = typename Rank2K::ElementAccumulator;
   using ElementCompute = typename Rank2K::Rank2Kkernel::Epilogue::OutputOp::ElementCompute;
 
@@ -282,7 +285,7 @@ struct TestbedRank2KUniversal {
     // Determine SMEM requirements and waive if not satisfied
     //
 
-    int smem_size = int(sizeof(typename Rank2K::Rank2Kkernel::SharedStorage));
+    size_t smem_size = sizeof(typename Rank2K::Rank2Kkernel::SharedStorage);
 
     cudaDeviceProp properties;
     int device_idx;
@@ -298,10 +301,9 @@ struct TestbedRank2KUniversal {
       throw std::runtime_error("cudaGetDeviceProperties() failed");
     }
 
-    if (properties.sharedMemPerMultiprocessor < smem_size) {
+    if (properties.sharedMemPerBlockOptin < smem_size) {
       return false;
     }
-
     return true;
   }
 

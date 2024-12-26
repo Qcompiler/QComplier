@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -314,7 +314,7 @@ __global__ void groupnorm_twopass_multiple_load(T*          output,
 }
 
 //ref_input & ref_output should be [N, H, W, C]
-//ref_gamma & ref_beta shoud be [1, 1, 1, C]
+//ref_gamma & ref_beta should be [1, 1, 1, C]
 template <typename T>
 void groupnorm(cutlass::Tensor4DCoord input_size,
                const int num_groups,

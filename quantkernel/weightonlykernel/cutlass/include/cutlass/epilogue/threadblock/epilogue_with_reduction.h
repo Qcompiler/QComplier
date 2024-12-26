@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -123,6 +123,8 @@ public:
 
   using Layout = layout::RowMajor;
   using LongIndex = typename Layout::LongIndex;
+
+  static bool const kIsSingleSource = true;
 
   /// The complete warp-level accumulator tile
   using AccumulatorTile = typename Base::AccumulatorTile;
@@ -294,7 +296,7 @@ public:
   CUTLASS_DEVICE
   void operator()(
     OutputOp const &output_op,                        ///< Output operator
-    ElementVector * reduction_output_ptr,          ///< Reduction output vector
+    ElementVector * reduction_output_ptr,             ///< Reduction output vector
     OutputTileIterator destination_iterator,          ///< Tile iterator for destination
     AccumulatorTile const &accumulators,              ///< Complete warp-level accumulator tile
     OutputTileIterator source_iterator,               ///< Tile iterator for source accumulator matrix

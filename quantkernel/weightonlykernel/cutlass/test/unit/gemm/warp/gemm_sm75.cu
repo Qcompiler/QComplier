@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -112,6 +112,27 @@ TEST(SM75_warp_gemm_tensor_op_congruous_f16, 128x128x32_32x32x32_16x8x8) {
 
   test::gemm::warp::Testbed<MmaTensorOp,
                             cutlass::gemm::GemmShape<128, 128, 32> >()
+      .run();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+TEST(SM75_warp_gemm_tensor_op_congruous_f16, 32x32x32_32x32x32_16x8x8) {
+  using Shape = cutlass::gemm::GemmShape<32, 32, 32>;
+  using InstructionShape = cutlass::gemm::GemmShape<16, 8, 8>;
+  using Element = cutlass::half_t;
+  using ElementC = float;
+  using LayoutA = cutlass::layout::ColumnMajorTensorOpMultiplicandCongruous<
+      cutlass::sizeof_bits<Element>::value, 32>;
+  using LayoutB = cutlass::layout::RowMajorTensorOpMultiplicandCongruous<
+      cutlass::sizeof_bits<Element>::value, 32>;
+
+  using MmaTensorOp = typename cutlass::gemm::warp::DefaultMmaTensorOp<
+      Shape, InstructionShape, Element, LayoutA, Element, LayoutB, ElementC,
+      cutlass::layout::RowMajor>::Type;
+
+  test::gemm::warp::Testbed<MmaTensorOp,
+                            cutlass::gemm::GemmShape<32, 32, 32> >()
       .run();
 }
 
@@ -326,7 +347,6 @@ TEST(SM75_warp_gemm_tensor_op_crosswise_f16, 128x128x64_16x16x64_16x8x8) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-
 TEST(SM75_warp_gemm_tensor_op_crosswise_i8, 128x128x64_64x64x64_8x8x16) {
   using Shape = cutlass::gemm::GemmShape<64, 64, 64>;
   using InstructionShape = cutlass::gemm::GemmShape<8, 8, 16>;
@@ -856,5 +876,4 @@ TEST(SM75_warp_gemm_tensor_op_crosswise_b1, 128x128x512_16x16x512_8x8x128) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-
 #endif

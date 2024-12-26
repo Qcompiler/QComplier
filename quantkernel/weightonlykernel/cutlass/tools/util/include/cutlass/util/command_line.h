@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -121,7 +121,7 @@ struct CommandLine {
    * Returns the commandline parameter for a given index (not including flags)
    */
   template <typename value_t>
-  void get_cmd_line_argument(int index, value_t& val) const {
+  void get_cmd_line_argument(size_t index, value_t& val) const {
     using namespace std;
     if (index < args.size()) {
       istringstream str_stream(args[index]);
@@ -185,10 +185,10 @@ struct CommandLine {
       vals.clear();
 
       // Recover from multi-value string
-      for (int i = 0; i < keys.size(); ++i) {
+      for (size_t i = 0; i < keys.size(); ++i) {
         if (keys[i] == string(arg_name)) {
           string val_string(values[i]);
-          seperate_string(val_string, vals, sep);
+          separate_string(val_string, vals, sep);
         }
       }
     }
@@ -225,7 +225,7 @@ struct CommandLine {
       range != ranges.end(); ++range) {
 
       std::vector<std::string> range_vals;
-      seperate_string(*range, range_vals, sep);
+      separate_string(*range, range_vals, sep);
       vals.push_back(range_vals);
     }
   }
@@ -283,7 +283,7 @@ struct CommandLine {
   }
 
   template <typename value_t>
-  static void seperate_string(std::string const& str,
+  static void separate_string(std::string const& str,
                               std::vector<value_t>& vals,
                               char sep = ',') {
     std::istringstream str_stream(str);

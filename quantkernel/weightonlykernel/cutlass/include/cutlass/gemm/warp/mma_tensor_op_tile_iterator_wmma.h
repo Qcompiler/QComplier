@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -493,7 +493,7 @@ public:
 
     Index elements_offset = layout_({WmmaShape::kRow, 0});
 
-    byte_offset_ -= (elements_offset + sizeof_bits<Element>::value) / 8;
+    byte_offset_ -= (elements_offset * sizeof_bits<Element>::value) / 8;
     return *this;
   }
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # Redistribution and use in source and binary forms, with or without
@@ -28,6 +28,8 @@
 
 include(CTest)
 
+set(CUTLASS_UNIT_TEST_COMMON_DIR ${CMAKE_CURRENT_LIST_DIR}/common)
+
 cutlass_add_library(
   cutlass_test_unit_infra 
   OBJECT
@@ -40,8 +42,9 @@ target_link_libraries(
   CUTLASS
   cutlass_tools_util_includes
   $<$<BOOL:${CUTLASS_ENABLE_CUBLAS}>:nvidia::cublas>
-  gtest
+  GTest::gtest
   cudart
+  cuda_driver
   )
 
 cutlass_add_library(
@@ -60,21 +63,41 @@ set(CUTLASS_TEST_UNIT_RESULTS_CACHE_DIR ${CMAKE_CURRENT_LIST_DIR}/data/hashes)
 
 function(cutlass_test_unit_add_executable NAME)
 
-  set(options)
+  set(options WITHOUT_CUDA)
   set(oneValueArgs)
-  set(multiValueArgs)
+  set(multiValueArgs TEST_SETS_SUPPORTED EXTRA_INCLUDE_DIRS)
   cmake_parse_arguments(_ "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
-  cutlass_add_executable(${NAME} ${__UNPARSED_ARGUMENTS})
+  cutlass_add_executable(${NAME} ${__UNPARSED_ARGUMENTS} BATCH_SOURCES OFF)
 
   target_compile_definitions(${NAME} PUBLIC CUTLASS_TARGET_NAME="${NAME}")
 
-  target_link_libraries(
+  target_include_directories(
     ${NAME}
     PRIVATE
-    cutlass_test_unit_infra
-    cutlass_test_unit_infra_lib
+    ${CUTLASS_UNIT_TEST_COMMON_DIR}
+    ${__EXTRA_INCLUDE_DIRS}
   )
+  if (__WITHOUT_CUDA)
+    # Avoid CUDA dependencies for host-only unit tests that provide the
+    # WITHOUT_CUDA argument.
+    target_link_libraries(
+      ${NAME}
+      PUBLIC
+      GTest::gtest
+    )
+  else()
+    target_link_libraries(
+      ${NAME}
+      PRIVATE
+      cutlass_test_unit_infra
+      cutlass_test_unit_infra_lib
+    )
+  endif()
+
+  if (CUTLASS_ENABLE_OPENMP_TESTS AND OpenMP_CXX_FOUND)
+    target_link_libraries(${NAME} PRIVATE OpenMP::OpenMP_CXX)
+  endif()
 
   string(REGEX REPLACE cutlass_ "" NAME_STEM ${NAME})
 
@@ -88,17 +111,18 @@ function(cutlass_test_unit_add_executable NAME)
 
   cutlass_add_executable_tests(
     ${NAME_STEM} ${NAME}
+    TEST_SETS_SUPPORTED ${__TEST_SETS_SUPPORTED}
     TEST_COMMAND_OPTIONS CUTLASS_TEST_UNIT_TEST_COMMAND_OPTIONS
     ${RESULT_CACHE_FILE_ARGS}
     )
 
 endfunction()
-
 add_custom_target(cutlass_test_unit)
 add_custom_target(test_unit)
 
 set(SUBDIRS
   core
+  cute
   gemm
   conv
   layout
@@ -106,6 +130,9 @@ set(SUBDIRS
   epilogue
   reduction
   util
+  pipeline
+  substrate
+  cluster_launch
   )
 
 if(TARGET nvidia::nvrtc AND TARGET nvidia::cuda_driver)

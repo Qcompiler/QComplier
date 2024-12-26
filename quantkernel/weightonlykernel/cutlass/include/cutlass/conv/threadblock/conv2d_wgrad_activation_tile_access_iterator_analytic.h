@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -195,7 +195,7 @@ public:
       s = filter_s_[iteration_contiguous_];
     }  
     else {
-      /// Multiple access to support non-128b alignment in contiguous dimenstion
+      /// Multiple access to support non-128b alignment in contiguous dimension
       c = (filter_c_[iteration_contiguous_] + iteration_vector_ * AccessType::kElements) % problem_size_.C;
       int wrap_c = (filter_c_[iteration_contiguous_] + iteration_vector_ * AccessType::kElements) / problem_size_.C;
       s = (filter_s_[iteration_contiguous_] + wrap_c) % problem_size_.S;
@@ -268,7 +268,7 @@ public:
   static Status can_implement(Conv2dProblemSize const &problem_size) {
 
     // check alignment constraint on iterator's contiguous dimension
-    if (problem_size.K % AccessType::kElements) {
+    if (problem_size.C % AccessType::kElements) {
       return Status::kErrorInvalidProblem;
     }
 

@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -66,6 +66,9 @@ struct GemmFunctionalKey {
   LayoutTypeID layout_B;
   ComplexTransform transform_B;
   NumericTypeID element_C;
+  LayoutTypeID layout_C;
+  NumericTypeID element_D;
+  LayoutTypeID layout_D;
 
   //
   // Methods
@@ -83,7 +86,10 @@ struct GemmFunctionalKey {
     NumericTypeID element_B = NumericTypeID::kF16,
     LayoutTypeID layout_B = LayoutTypeID::kColumnMajor,
     ComplexTransform transform_B = ComplexTransform::kNone,
-    NumericTypeID element_C = NumericTypeID::kF16
+    NumericTypeID element_C = NumericTypeID::kF16,
+    LayoutTypeID layout_C = LayoutTypeID::kColumnMajor,
+    NumericTypeID element_D = NumericTypeID::kF16,
+    LayoutTypeID layout_D = LayoutTypeID::kColumnMajor
   ):
     provider(provider),
     gemm_kind(gemm_kind),
@@ -95,12 +101,15 @@ struct GemmFunctionalKey {
     element_B(element_B),
     layout_B(layout_B),
     transform_B(transform_B),
-    element_C(element_C)
+    element_C(element_C),
+    layout_C(layout_C),
+    element_D(element_D),
+    layout_D(layout_D)
   { }
 
   inline
   bool operator==(GemmFunctionalKey const &rhs) const {
-    return 
+    return
       (provider == rhs.provider) &&
       (gemm_kind == rhs.gemm_kind) &&
       (element_compute == rhs.element_compute) &&
@@ -111,7 +120,10 @@ struct GemmFunctionalKey {
       (element_B == rhs.element_B) &&
       (layout_B == rhs.layout_B) &&
       (transform_B == rhs.transform_B) &&
-      (element_C == rhs.element_C);
+      (element_C == rhs.element_C) &&
+      (layout_C == rhs.layout_C) &&
+      (element_D == rhs.element_D) &&
+      (layout_D == rhs.layout_D);
   }
 
   inline
@@ -137,6 +149,9 @@ std::ostream & operator<<(std::ostream &out, cutlass::library::GemmFunctionalKey
     << "         layout_B: " << to_string(k.layout_B) << "\n"
     << "      transform_B: " << to_string(k.transform_B) << "\n"
     << "        element_C: " << to_string(k.element_C) << "\n"
+    << "         layout_C: " << to_string(k.layout_C) << "\n"
+    << "        element_D: " << to_string(k.element_D) << "\n"
+    << "         layout_D: " << to_string(k.layout_D) << "\n"
     << "}";
 
   return out;
@@ -150,25 +165,28 @@ struct GemmFunctionalKeyHasher {
 
   inline
   static size_t rotl(size_t key, int shl) {
-    return (key << shl) | (key >> (sizeof(key)*8 - shl));
+    return (key << shl) | (key >> (sizeof(key)*8u - static_cast<size_t>(shl)));
   }
 
   inline
   size_t operator()(GemmFunctionalKey const &key) const {
     IntHash hash;
 
-    return 
-      rotl(hash(int(key.provider)), 1) ^ 
-      rotl(hash(int(key.gemm_kind)), 2) ^ 
+    return
+      rotl(hash(int(key.provider)),        1) ^
+      rotl(hash(int(key.gemm_kind)),       2) ^
       rotl(hash(int(key.element_compute)), 3) ^
-      rotl(hash(int(key.element_scalar)), 4) ^
-      rotl(hash(int(key.element_A)), 5) ^
-      rotl(hash(int(key.layout_A)), 6) ^
-      rotl(hash(int(key.transform_A)), 7) ^
-      rotl(hash(int(key.element_B)), 8) ^
-      rotl(hash(int(key.layout_B)), 9) ^
-      rotl(hash(int(key.transform_B)), 10) ^
-      rotl(hash(int(key.element_C)), 11);
+      rotl(hash(int(key.element_scalar)),  4) ^
+      rotl(hash(int(key.element_A)),       5) ^
+      rotl(hash(int(key.layout_A)),        6) ^
+      rotl(hash(int(key.transform_A)),     7) ^
+      rotl(hash(int(key.element_B)),       8) ^
+      rotl(hash(int(key.layout_B)),        9) ^
+      rotl(hash(int(key.transform_B)),    10) ^
+      rotl(hash(int(key.element_C)),      11) ^
+      rotl(hash(int(key.layout_C)),       12) ^
+      rotl(hash(int(key.element_D)),      13) ^
+      rotl(hash(int(key.layout_D)),       14);
   }
 };
 
@@ -189,7 +207,7 @@ struct GemmPreferenceKey {
   GemmPreferenceKey(int cc, int alignment): compute_capability(cc), alignment(alignment) { }
 
   bool operator<(GemmPreferenceKey const &rhs) const {
-    return (compute_capability < rhs.compute_capability) || 
+    return (compute_capability < rhs.compute_capability) ||
       ((compute_capability == rhs.compute_capability) && (alignment < rhs.alignment));
   }
 
@@ -197,6 +215,18 @@ struct GemmPreferenceKey {
     return compute_capability == rhs.compute_capability;
   }
 };
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+
+inline
+std::ostream& operator<< (std::ostream& out, const cutlass::library::GemmPreferenceKey& key) {
+    out << "{\n"
+      << "compute_capability : " << key.compute_capability << std::endl
+      << "alignment          : " << key.alignment << std::endl
+      << "}";
+
+  return out;
+}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -212,7 +242,6 @@ using GemmOperationFunctionalMap = std::unordered_map<
   GemmOperationVectorMap,
   GemmFunctionalKeyHasher
 >;
-/////////////////////////////////////////////////////////////////////////////////////////////////
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 //                          Data Structures for Conv Functional Maps
@@ -259,9 +288,9 @@ struct ConvFunctionalKey {
     layout_C(layout_C),
     element_accumulator(element_accumulator),
     element_compute(element_compute)
-  { } 
+  { }
 
-  inline 
+  inline
   bool operator==(ConvFunctionalKey const &rhs) const {
     return
       (provider == rhs.provider) &&
@@ -276,7 +305,7 @@ struct ConvFunctionalKey {
       (element_compute == rhs.element_compute);
   }
 
-  inline 
+  inline
   bool operator!=(ConvFunctionalKey const &rhs) const {
     return !(*this == rhs);
   }
@@ -296,7 +325,7 @@ std::ostream& operator<< (std::ostream& out, const cutlass::library::ConvFunctio
       << "element_accumulator: " << to_string(key.element_accumulator) << std::endl
       << "element_compute: " << to_string(key.element_compute) << std::endl
       << "}";
-  
+
   return out;
 }
 
@@ -306,14 +335,14 @@ struct ConvFunctionalKeyHasher {
 
   inline
   static size_t rotl(size_t key, int shl) {
-    return (key << shl) | (key >> (sizeof(key)*8 - shl));
+    return (key << shl) | (key >> (sizeof(key)*8u - static_cast<size_t>(shl)));
   }
 
   inline
   size_t operator()(ConvFunctionalKey const &key) const {
     IntHash hash;
 
-    return 
+    return
       rotl(hash(int(key.provider)), 1) ^
       rotl(hash(int(key.conv_kind)), 2) ^
       rotl(hash(int(key.element_A)), 3) ^
@@ -341,11 +370,11 @@ struct ConvPreferenceKey {
 
   ConvPreferenceKey(): compute_capability(), iterator_algorithm() { }
 
-  ConvPreferenceKey(int cc, IteratorAlgorithmID iterator_algorithm): 
+  ConvPreferenceKey(int cc, IteratorAlgorithmID iterator_algorithm):
     compute_capability(cc), iterator_algorithm(iterator_algorithm) { }
 
   bool operator<(ConvPreferenceKey const &rhs) const {
-    return (compute_capability < rhs.compute_capability) || 
+    return (compute_capability < rhs.compute_capability) ||
       ((compute_capability == rhs.compute_capability) && (iterator_algorithm < rhs.iterator_algorithm));
   }
 
@@ -404,9 +433,9 @@ struct ReductionFunctionalKey {
     element_compute(element_compute),
     reduce_math_op(reduce_math_op),
     epilogue_math_op(epilogue_math_op)
-  { } 
+  { }
 
-  inline 
+  inline
   bool operator==(ReductionFunctionalKey const &rhs) const {
     return
       (provider == rhs.provider) &&
@@ -418,7 +447,7 @@ struct ReductionFunctionalKey {
       (epilogue_math_op == rhs.epilogue_math_op);
   }
 
-  inline 
+  inline
   bool operator!=(ReductionFunctionalKey const &rhs) const {
     return !(*this == rhs);
   }
@@ -430,14 +459,14 @@ struct ReductionFunctionalKeyHasher {
 
   inline
   static size_t rotl(size_t key, int shl) {
-    return (key << shl) | (key >> (sizeof(key)*8 - shl));
+    return (key << shl) | (key >> (sizeof(key)*8u - static_cast<size_t>(shl)));
   }
 
   inline
   size_t operator()(ReductionFunctionalKey const &key) const {
     IntHash hash;
 
-    return 
+    return
       rotl(hash(int(key.provider)), 1) ^
       rotl(hash(int(key.element_workspace)), 2) ^
       rotl(hash(int(key.element_accumulator)), 3) ^
@@ -476,19 +505,19 @@ using ReductionOperationFunctionalMap = std::unordered_map<
 class OperationTable {
 public:
 
-  /// Map of all operations of type kGemm 
+  /// Map of all operations of type kGemm
   // provider (kCUTLASS)
   GemmOperationFunctionalMap gemm_operations;
 
-  /// Map of all operations of type kConv2d 
+  /// Map of all operations of type kConv2d
   // provider (kCUTLASS, kReferenceHost, kReferenceDevice)
   ConvOperationFunctionalMap conv2d_operations;
 
-  /// Map of all operations of type kConv3d 
+  /// Map of all operations of type kConv3d
   // provider (kCUTLASS, kReferenceHost, kReferenceDevice)
   ConvOperationFunctionalMap conv3d_operations;
 
-  /// Map of all operations of type kConv2d 
+  /// Map of all operations of type kConv2d
   // provider (kCUTLASS)
   ReductionOperationFunctionalMap reduction_operations;
 

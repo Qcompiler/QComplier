@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright (c) 2017 - 2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * Copyright (c) 2017 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -32,7 +32,7 @@
    \brief 
 */
 
-#include "device_context.h"
+#include "cutlass/profiler/device_context.h"
 
 namespace cutlass {
 namespace profiler {
@@ -76,7 +76,8 @@ DeviceAllocation *DeviceContext::allocate_tensor(
   library::LayoutTypeID layout_id, 
   std::vector<int> const &extent, 
   std::vector<int64_t> const &stride,
-  int batch_count) {
+  int batch_count,
+  int seed_shift) {
 
   DeviceAllocation *allocation = 
     allocate_tensor(name, type, layout_id, extent, stride, batch_count);
@@ -88,6 +89,12 @@ DeviceAllocation *DeviceContext::allocate_tensor(
     if(!options.initialization.fix_data_distribution) {
       // change data distribution based on bit width
       switch(type) {
+        case library::NumericTypeID::kFE4M3:
+          data_distribution.set_uniform(-1, 1, 0);
+          break;
+        case library::NumericTypeID::kFE5M2:
+          data_distribution.set_uniform(-1, 1, 0);
+          break;
         case library::NumericTypeID::kF16:
           data_distribution.set_uniform(-3, 3, 0);
           break;
@@ -116,15 +123,44 @@ DeviceAllocation *DeviceContext::allocate_tensor(
       }
     }
 
+    // Override pnz for the A/B/C tensors if overridden for Gaussian distributions
+    if (data_distribution.kind == Distribution::Gaussian) {
+      double mean = data_distribution.gaussian.mean;
+      double stddev = data_distribution.gaussian.stddev;
+      int scale = data_distribution.int_scale;
+
+      if (name == "A" && data_distribution.gaussian.pnzA != 100.0) {
+        data_distribution.set_gaussian(mean, stddev, scale, data_distribution.gaussian.pnzA);
+      }
+      else if (name == "B" && data_distribution.gaussian.pnzB != 100.0) {
+        data_distribution.set_gaussian(mean, stddev, scale, data_distribution.gaussian.pnzB);
+      }
+      else if (name == "C" && data_distribution.gaussian.pnzC != 100.0) {
+        data_distribution.set_gaussian(mean, stddev, scale, data_distribution.gaussian.pnzC);
+      }
+    }
+
     if (options.initialization.provider == library::Provider::kReferenceDevice) {
-      allocation->initialize_random_device(
-        options.initialization.seed, 
-        data_distribution);
+      if (data_distribution.kind == Distribution::Sequential) {
+        allocation->initialize_sequential_device(
+          data_distribution);
+      }
+      else {
+        allocation->initialize_random_device(
+          options.initialization.seed + seed_shift, 
+          data_distribution);
+      }
     }
     else if (options.initialization.provider == library::Provider::kReferenceHost) {
-      allocation->initialize_random_host(
-        options.initialization.seed, 
-        data_distribution);
+      if (data_distribution.kind == Distribution::Sequential) {
+        allocation->initialize_sequential_host(
+          data_distribution);
+      }
+      else {
+        allocation->initialize_random_host(
+          options.initialization.seed + seed_shift, 
+          data_distribution);
+      }
     }
   }
 
@@ -140,7 +176,8 @@ DeviceAllocation *DeviceContext::allocate_sparsemeta_tensor(
   library::NumericTypeID type_a,
   std::vector<int> const &extent, 
   std::vector<int64_t> const &stride,
-  int batch_count) {
+  int batch_count,
+  int seed_shift) {
 
   DeviceAllocation *allocation = 
     allocate_tensor(name, type, layout_id, extent, stride, batch_count);
@@ -151,12 +188,12 @@ DeviceAllocation *DeviceContext::allocate_sparsemeta_tensor(
 
     if (options.initialization.provider == library::Provider::kReferenceDevice) {
       allocation->initialize_random_sparsemeta_device(
-        options.initialization.seed, 
+        options.initialization.seed + seed_shift, 
         MetaSizeInBits);
     }
     else if (options.initialization.provider == library::Provider::kReferenceHost) {
       allocation->initialize_random_sparsemeta_host(
-        options.initialization.seed, 
+        options.initialization.seed + seed_shift, 
         MetaSizeInBits);
     }
   }
