@@ -126,14 +126,13 @@ class MixLlamaMLP(nn.Module):
  
         
         
-        up_output = self.up_proj_(x)
-        gate_output = self.gate_proj_(x)
+        up_output = self.up_proj_(x, self.MLPCache)
+        gate_output = self.gate_proj_.forward_without_preconditionFusedSilu(x, self.MLPCache)
         
-        x = F.silu(gate_output) * up_output
-        #gate_output *= up_output
+        gate_output *= up_output
 
-        
-        y = self.down_proj_(x,1)
+
+        y = self.down_proj_(gate_output)
 
  
         return y

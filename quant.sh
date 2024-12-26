@@ -6,7 +6,7 @@ set -x
 export PYTHONPATH=/home/chenyidong/QComplier
 models=( $1 )
 path=$2
-for bit in    8 
+for bit in   4 
   do
     for model in "${models[@]}"
             do

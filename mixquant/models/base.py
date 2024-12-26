@@ -8,7 +8,7 @@ from typing import List, Union, Dict
 from safetensors.torch import save_file
 
 from huggingface_hub import snapshot_download
-
+from transformers import AutoModelForCausalLM, AutoConfig, PreTrainedModel
 from transformers.modeling_utils import shard_checkpoint
 from mixquant.modules.linear import   MixLinear_GEMM
 from mixquant.utils.module import get_named_linears, set_op_by_name, weight_only_map,eightbit_only_name

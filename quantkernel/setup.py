@@ -84,9 +84,11 @@ check_dependencies()
 include_dirs = get_include_dirs()
 generator_flags = get_generator_flag()
 arch_flags = get_compute_capabilities()
-library_dirs_ = ['/home/chenyidong/QComplier/quantkernel/weightonlykernel/build',]
-libraries_ = ['weightonlykernel',]
+# library_dirs_ = ['/home/chenyidong/QComplier/quantkernel/weightonlykernel/build',]
+# libraries_ = ['weightonlykernel',]
 
+library_dirs_ = []
+libraries_ = []
 print(include_dirs)
 if os.name == "nt":
     include_arch = os.getenv("INCLUDE_ARCH", "1") == "1"

@@ -3542,10 +3542,10 @@ torch::Tensor w8_a16_gemm_forward_torch(torch::Tensor &input,
     // char *workspace_ptr = workspace_size > 0 ? (char *)cudaMalloc((void **)&ptr, workspace_size) : nullptr;
     // const bool use_cuda_kernel = false; 
     const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-
-    w8_a16_gemm_forward_cuda(input_ptr, weight_ptr,
-                                       scale_ptr, output_ptr, 
-                                       m, n, k,
-                                       stream);
+    assert (false);
+    // w8_a16_gemm_forward_cuda(input_ptr, weight_ptr,
+    //                                    scale_ptr, output_ptr, 
+    //                                    m, n, k,
+    //                                    stream);
     return output;
 }

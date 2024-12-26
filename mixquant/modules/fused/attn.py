@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 from mixquant.modules.fused.cache import WindowedCache
 from mixquant.utils.fused_utils import get_attention_shapes
-
+from flash_attn import flash_attn_func, flash_attn_varlen_func
 
 
 

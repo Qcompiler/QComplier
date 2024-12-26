@@ -218,40 +218,41 @@ class MixQuantizer:
             linear_layer.cpu()
 
             print(name)
-            if "q_proj" in name:
-                print("replace q_proj")
-                assert q_linear.q_weight.shape == qweight[:, 0 : qshape[0]].shape
-                q_linear.q_weight =  qweight[ :,  0 :    qshape[0] ].contiguous() 
-                q_linear.q_scale_col.copy_(q_scale_col[0 : qshape[0]])
+            if w_bit == 8:
+                if "q_proj" in name:
+                    print("replace q_proj")
+                    assert q_linear.q_weight.shape == qweight[:, 0 : qshape[0]].shape
+                    q_linear.q_weight =  qweight[ :,  0 :    qshape[0] ].contiguous() 
+                    q_linear.q_scale_col.copy_(q_scale_col[0 : qshape[0]])
+
+                    
+                if "k_proj" in name:
+                    print("replace k_proj")
+                    assert q_linear.q_weight.shape == qweight[: , qshape[0] : qshape[0] + kshape[0]].shape
+                    q_linear.q_weight.copy_( qweight[:,  qshape[0] : (qshape[0] + kshape[0]   )  ].contiguous() )
+                    q_linear.q_scale_col.copy_( q_scale_col[qshape[0] : qshape[0] + kshape[0]])
+
+                if "v_proj" in name:
+                    print("replace v_proj")
+                    assert q_linear.q_weight.shape == qweight[:, qshape[0] + kshape[0] : qshape[0] + kshape[0] + vshape[0]].shape
+                    q_linear.q_weight.copy_(  qweight[:,   (qshape[0] + kshape[0])   :   (qshape[0] + kshape[0] + vshape[0]) ].contiguous() )
+                    q_linear.q_scale_col.copy_(q_scale_col[qshape[0] + kshape[0] : qshape[0] + kshape[0] + vshape[0]])
 
                 
-            if "k_proj" in name:
-                print("replace k_proj")
-                assert q_linear.q_weight.shape == qweight[: , qshape[0] : qshape[0] + kshape[0]].shape
-                q_linear.q_weight.copy_( qweight[:,  qshape[0] : (qshape[0] + kshape[0]   )  ].contiguous() )
-                q_linear.q_scale_col.copy_( q_scale_col[qshape[0] : qshape[0] + kshape[0]])
-
-            if "v_proj" in name:
-                print("replace v_proj")
-                assert q_linear.q_weight.shape == qweight[:, qshape[0] + kshape[0] : qshape[0] + kshape[0] + vshape[0]].shape
-                q_linear.q_weight.copy_(  qweight[:,   (qshape[0] + kshape[0])   :   (qshape[0] + kshape[0] + vshape[0]) ].contiguous() )
-                q_linear.q_scale_col.copy_(q_scale_col[qshape[0] + kshape[0] : qshape[0] + kshape[0] + vshape[0]])
-
-             
-            if "gate_proj" in name:
-                print("replace gate_proj")
-                assert q_linear.q_weight.shape == gate_up_qweight[:, 0 : gateshape[0]].shape    
-                q_linear.q_weight.copy_(gate_up_qweight[:,  0 :    gateshape[0]].contiguous()   )
-                q_linear.q_scale_col.copy_( gate_up_q_scale_col[0 : gateshape[0]])
+                if "gate_proj" in name:
+                    print("replace gate_proj")
+                    assert q_linear.q_weight.shape == gate_up_qweight[:, 0 : gateshape[0]].shape    
+                    q_linear.q_weight.copy_(gate_up_qweight[:,  0 :    gateshape[0]].contiguous()   )
+                    q_linear.q_scale_col.copy_( gate_up_q_scale_col[0 : gateshape[0]])
 
 
 
-            if "up_proj" in name:
-                print("replace up_proj")
-                assert q_linear.q_weight.shape == gate_up_qweight[ :, gateshape[0] : upshape[0] + gateshape[0]].shape   
-                q_linear.q_weight.copy_( gate_up_qweight[ :,  gateshape[0] :  (upshape[0] + gateshape[0])].contiguous()   )
-                q_linear.q_scale_col.copy_( gate_up_q_scale_col[gateshape[0] : upshape[0] + gateshape[0]])
- 
+                if "up_proj" in name:
+                    print("replace up_proj")
+                    assert q_linear.q_weight.shape == gate_up_qweight[ :, gateshape[0] : upshape[0] + gateshape[0]].shape   
+                    q_linear.q_weight.copy_( gate_up_qweight[ :,  gateshape[0] :  (upshape[0] + gateshape[0])].contiguous()   )
+                    q_linear.q_scale_col.copy_( gate_up_q_scale_col[gateshape[0] : upshape[0] + gateshape[0]])
+    
 
             set_op_by_name(module, name, q_linear)
             clear_memory()
