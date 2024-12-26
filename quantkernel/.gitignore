@@ -2,3 +2,4 @@ weightonlykernel/
 weightonlykernel/*
 ./weightonlykernel
 build
+build/
