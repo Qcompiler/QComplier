@@ -183,3 +183,6 @@ roofline/
 weight/
 *.onnx
 
+
+
+quantkernel/weightonlykernel/*
