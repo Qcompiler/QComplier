@@ -22,7 +22,7 @@ def unpack_int8_to_int4(weight,ind):
     return mixlib.unpack_int4_to_fp16(weight,ind)
  
 
-
+NN = 1024
 class MixLinear_GEMM(nn.Module):
     def __init__(self, in_features, out_features, bias, dev,  bit, 
             weight_only = False, cache = None, fp_features_num = 128):
@@ -54,7 +54,12 @@ class MixLinear_GEMM(nn.Module):
                                                                     requires_grad=False))
         self.register_buffer('ind', torch.empty(
             (fp_features_num), dtype=torch.int32,device=dev, requires_grad=False)) 
-
+        # self.register_buffer('new_ind', torch.empty(
+        #     (NN), dtype=torch.int32,device=dev, requires_grad=False)) 
+        # self.register_buffer('new_fp_weight', torch.empty((out_features, NN),
+        #                                                             device=dev,
+        #                                                             dtype=torch.float16, 
+        #                                                             requires_grad=False))
 
         if bit == 8:
             self.register_buffer('q_weight', torch.empty((in_features,out_features), dtype=torch.int8, device=dev,requires_grad=False))
@@ -111,12 +116,14 @@ class MixLinear_GEMM(nn.Module):
         assert layer_scales is not None
         fp_features = quant_linear.fp_features_num
         linear.ind = torch.sort(layer_scales)[1][-fp_features:]
-            
+
 
         tmp = torch.clone(linear.weight.data.cuda())               
         quant_linear.weight_cache.copy_(tmp[:, linear.ind].to(tmp.dtype).cuda())  
         quant_linear.ind.copy_(linear.ind.cuda().to(torch.int32))
 
+        # quant_linear.new_ind.copy_(torch.sort(layer_scales)[1][:NN].cuda().to(torch.int32))
+        # quant_linear.new_fp_weight.copy_(tmp[:, quant_linear.new_ind].to(tmp.dtype).cuda())  
         
         if bit == 8:
 

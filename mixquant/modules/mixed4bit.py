@@ -78,7 +78,8 @@ class MyLayer(nn.Module):
         q = np.zeros((res.shape[0], res.shape[1] // 8), dtype=np.uint32)
    
         res = res.cpu().numpy().astype(np.uint32)
-        # print(res)
+        
+        #print( np.sum(res == 8) / (res.shape[0] * res.shape[1]) )
         # exit()
         # print(res.shape)
 

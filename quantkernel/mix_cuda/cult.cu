@@ -3517,7 +3517,7 @@ torch::Tensor mixgemmforward4bit(int M, int N, int K,
     return fp16_out;
 }
 
-#include "weightonlykernel/fpA_intB_gemm_wrapper.h"
+// #include "weightonlykernel/fpA_intB_gemm_wrapper.h"
 // void w8_a16_gemm_forward_cuda(const half* input, const  int8_t * weight,
 //                                       const  half *scale, half* output, 
 //                                       int m, int n, int k,
