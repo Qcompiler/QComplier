@@ -8,7 +8,6 @@ __pycache__/
 
 # C extensions
 *.so
-act_scales
 act_scales/
 act_scales/*
 # Distribution / packaging
