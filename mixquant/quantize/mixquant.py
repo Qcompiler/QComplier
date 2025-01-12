@@ -71,7 +71,12 @@ class MixQuantizer:
             clear_memory()
 
             # Quantize weights
-            self._apply_quant(self.modules[i], named_linears, weight_only, layer = i)
+            arch = torch.cuda.get_device_capability()
+            if arch[0] * 10 + arch[1] <= 89:
+
+                self._apply_quant(self.modules[i], named_linears, weight_only, layer = i)
+            else:
+                self._apply_quant_sm90(self.modules[i], named_linears, weight_only, layer = i)
             clear_memory()
  
 
@@ -159,6 +164,7 @@ class MixQuantizer:
             linear_layer = linear_layer.cuda().half()
 
             if self.version == 'MIX':
+                
                 q_linear_module = MixLinear_GEMM
 
             else:
@@ -257,7 +263,135 @@ class MixQuantizer:
             set_op_by_name(module, name, q_linear)
             clear_memory()
         
+    def _apply_quant_sm90(self, module, named_linears: Dict[str, nn.Linear], weight_only_, layer):
+
+        print(" quant model for sm90")
+        if isinstance(self.model.config.architectures,list):
+            name = self.model.config.architectures[0]
+        else:
+            name = self.model.config.architectures
+        weight_only_name = weight_only_map[ name ]
+        print(named_linears.items())
+        merged = False
+        up_merged = False
+
+        print("model name is")
+        print(name)
+        if "GLM" in name:
+            merged = True
+            up_merged = True
+        if "Baichuan" in name:
+            merged = True
+            up_merged = False
         
+        if not merged:
+            q, k, v =   named_linears['self_attn.q_proj'].weight.data, \
+                        named_linears['self_attn.k_proj'].weight.data, named_linears['self_attn.v_proj'].weight.data, 
+            qshape =  q.shape
+            kshape =  k.shape
+            vshape =  v.shape
+        
+        if not up_merged:
+            gate = named_linears['mlp.gate_proj'].weight.data
+            up = named_linears['mlp.up_proj'].weight.data
+            upshape = up.shape
+            
+            gateshape = gate.shape
+        if not merged:
+            merged_qvk = torch.nn.Linear(q.shape[1], qshape[0] + kshape[0] + vshape[0], bias = False  )
+            merged_qvk.weight.data = torch.cat( [q,  k , v], dim = 0)
+
+            test_error = False
+            
+                
+            int8_weight_cpu = torch.t(merged_qvk.weight.data).contiguous().cpu()
+            qweight, q_scale_col = quant_weights(int8_weight_cpu, torch.int8, False)
+
+            # test for error
+        print("current layer is ",layer)
+        
+        if not up_merged:
+            assert up.shape[1] == gate.shape[1]
+            merged_up_gate = torch.nn.Linear(up.shape[1], upshape[0] + gateshape[0], bias = False  )
+            merged_up_gate.weight.data = torch.cat( [gate,  up], dim = 0)
+
+            
+            int8_weight_cpu = torch.t(merged_up_gate.weight.data).contiguous().cpu()
+            gate_up_qweight, gate_up_q_scale_col = quant_weights(int8_weight_cpu, torch.int8, False)
+
+
+        #print(gate_up_qweight)
+        # than we do not need to use the qkv or update!!!
+        for name, linear_layer in named_linears.items():
+
+
+            # NOTE: small regression in perplexity if linear layer uses .cpu().float()
+            linear_layer = linear_layer.cuda().half()
+
+            if self.version == 'MIX':
+                from mixquant.modules.linear_sm90 import MixLinear_GEMM_SM90
+                q_linear_module = MixLinear_GEMM_SM90
+
+            else:
+                raise NotImplementedError
+            
+            # for same small blocks we do not need the mixquant, we only use the weight only quant
+
+            weight_only = False
+
+            for key in weight_only_name:
+                if key in  name:
+                    weight_only = True
+                    break
+                
+            w_bit = self.w_bit
+            if w_bit == 4:
+                for key in eightbit_only_name:
+                    if key in  name:
+                        w_bit = 8
+                        weight_only = False 
+
+
+            relative_path = "act_scales/%s.pt"%(self.model.config._name_or_path.split("/")[-1])
+
+            
+            act_scales = torch.load(relative_path)
+
+
+            if 'opt' in self.model.config._name_or_path.split("/")[-1]:
+                layer_scales = act_scales['model.decoder.layers.{}.{}'.format(layer, name)]
+
+            elif 'falcon' in self.model.config._name_or_path.split("/")[-1]:
+                layer_scales = act_scales['transformer.h.{}.{}'.format(layer, name)]    
+            elif 'Baichuan' in self.model.config._name_or_path.split("/")[-1]:
+
+                layer_scales = act_scales['model.layers.{}.{}'.format(layer, name)]
+            elif "glm" in self.model.config._name_or_path.split("/")[-1]:
+                layer_scales = act_scales['transformer.encoder.layers.{}.{}'.format(layer, name)]
+            else:
+                layer_scales = act_scales['model.layers.{}.{}'.format(layer, name)]
+
+            fp_features_num = 128
+
+ 
+
+            q_linear = q_linear_module.from_linear(
+                linear=linear_layer,
+                weight_only = weight_only,
+                init_only=False,
+                bit = w_bit,
+                layer_scales = layer_scales,
+                fp_features_num = fp_features_num
+            )
+
+   
+
+            linear_layer.cpu()
+
+     
+            set_op_by_name(module, name, q_linear)
+            clear_memory()
+            
 
     def pseudo_dequantize_tensor(
         self, w: nn.Linear, scales: torch.Tensor, zeros: Optional[torch.Tensor] = None
