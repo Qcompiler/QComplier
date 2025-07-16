@@ -20,7 +20,7 @@ quant_config = { "w_bit": args.w_bit, "version": "MIX" }
 print(quant_path)
 # Load model
 # NOTE: pass safetensors=True to load safetensors
-model = AutoForCausalLM.from_pretrained(model_path, mix = True, **{"low_cpu_mem_usage": True},device_map='cpu')
+model = AutoForCausalLM.from_pretrained(model_path, mix = True, **{"low_cpu_mem_usage": True}, safetensors= True, device_map='cpu')
 tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
 
 print(model)
