@@ -25,7 +25,7 @@ def unpack_int8_to_int4(weight,ind):
 NN = 1024
 class MixLinear_GEMM(nn.Module):
     def __init__(self, in_features, out_features, bias, dev,  bit, 
-            weight_only = False, cache = None, fp_features_num = 128):
+            weight_only = False, cache = None, fp_features_num = 128, arch = 86):
         super().__init__()
         
  
@@ -34,7 +34,7 @@ class MixLinear_GEMM(nn.Module):
         self.bit = bit
  
 
-
+    
         self.register_buffer('scale_col', torch.empty((1,out_features), dtype=torch.float16, device=dev,requires_grad=False))
 
 
@@ -98,12 +98,12 @@ class MixLinear_GEMM(nn.Module):
 
     @classmethod
     def from_linear(cls, linear, bit, weight_only=False, init_only=False,cache=None, 
-                    layer_scales= None, dev = 'cuda', fp_features_num = 128):
+                    layer_scales= None, dev = 'cuda', fp_features_num = 128 ,arch = 86):
 
 
         quant_linear = cls(linear.in_features, linear.out_features, linear.bias is not None, 
                            dev, bit=bit, weight_only=weight_only,
-                           cache=cache, fp_features_num = fp_features_num)
+                           cache=cache, fp_features_num = fp_features_num, arch = arch)
    
 
         if init_only is True: 
@@ -314,89 +314,3 @@ class MixLinear_GEMM(nn.Module):
  
         return y1.reshape(cache.shape)
 
-    @torch.no_grad()
-    def forward_without_preconditionFusedSilu(self, x, cache):
-        
-
-        inputs = x.reshape(-1, x.shape[-1])
-        M =  inputs.shape[0]
-
-
-        if not self.forward_without_precondition_len ==  cache.ind.shape[0]:
-
-            
-            if cache.ind.shape[0]:
-                ind = cache.new_ind
-                if self.bit == 8:
-                    weight_cache = self.weight[:,ind].to(torch.float16) *  self.scale_col.T
-                else:
-                    w = unpack_int8_to_int4(self.weight, ind)
-                    weight_cache = w *  self.scale_col.T
-
-                if self.ind.shape[0] == 0:
-                    self.weight_cache =  weight_cache
-                else:
-                    self.weight_cache =  torch.hstack((self.weight_cache,weight_cache))
-                self.ind = cache.ind
-                self.forward_without_precondition_len = self.ind.shape[0]
-
- 
- 
-      
-        if self.arch == 9:
-            y = mixlib.gemm(cache.q_xcache,self.weight,M, self.out_features, self.in_features)
-            if self.ind.shape[0]:
-                outliers_fp16 = torch.mm( cache.activation_outliers ,  self.weight_cache.T)
-                y1 = mixlib.dequantizeInt8Silu(y, cache.x_scale, self.scale_col, outliers_fp16, 8, M, self.out_features)
-                
-            else:
-                y1 = mixlib.dequantizeInt8Silu(y, cache.x_scale, self.scale_col, self.cache.zeros, 8, M, self.out_features)
-                
-
-        else:    
-            if self.bit == 8:        
-                if self.ind.shape[0]:
- 
-                    outliers_fp16 = torch.mm( cache.activation_outliers,  self.weight_cache.T)
-                
-                    
-                    y1 = mixlib.int8FusedDequantizeSilu(cache.q_xcache, 
-                                                            self.weight, 
-                                                            cache.x_scale,
-                                                            self.scale_col,
-                                                            outliers_fp16,
-                                                            M,self.out_features,self.in_features)  
-                    
-                else:
-
-                    y1 = mixlib.int8FusedDequantizeSilu(cache.q_xcache, 
-                                                            self.weight, 
-                                                            cache.x_scale,
-                                                            self.scale_col,
-                                                            self.cache.zeros,
-                                                            M,self.out_features,self.in_features )  
-
-            if self.bit == 4:        
-                if self.ind.shape[0]:
-
-
-                    outliers_fp16 = torch.mm( cache.activation_outliers,  
-                    self.weight_cache.T)
-                    
-                    y1 = mixlib.int4FusedDequantizeSilu(cache.q_xcache, 
-                                                            self.weight, 
-                                                            cache.x_scale,
-                                                            self.scale_col,
-                                                            outliers_fp16,
-                                                            M,self.out_features,
-                                                            (self.in_features )// 2)  
-                    
-                else:
- 
-                    raise RuntimeError("int4 mod should have outliers !")
-
-        if self.bias is not None:
-            y1 += self.bias
-
-
-        return y1.reshape(cache.shape)
