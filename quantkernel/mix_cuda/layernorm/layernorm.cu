@@ -132,6 +132,7 @@ __global__ void generalT5LayerNorm_extract_outliers(
     __shared__ float s_variance;
     float            variance = 0.0f;
 
+    
     float local_var_sum = 0.0f;
     for (int i = tid; i < n; i += blockDim.x) {
         float diff = to_float(__ldg(&input[blockIdx.x * n + i]));
@@ -170,7 +171,7 @@ __global__ void generalT5LayerNorm_extract_outliers(
     __syncthreads();
 
 
-    // do reduction in shared mem
+    // // do reduction in shared mem
     for (unsigned int s= blockDim.x/2; s >= 1; s >>=1 ) {
         if (tid < s) {
             sdata[tid] =  __hmax ( __habs(sdata[tid + s]),  sdata[tid]);
@@ -179,8 +180,7 @@ __global__ void generalT5LayerNorm_extract_outliers(
     }
 
     half  max = sdata[0];
-    // write result for this block to global mem
-    //if (tid < 32) warpReduce(sdata, tid);
+
 
     __syncthreads();
 
@@ -188,7 +188,7 @@ __global__ void generalT5LayerNorm_extract_outliers(
     if (tid == 0){
         scale[bid] = quant_scales;
     }
-    // quant
+    // // quant
     int8_t * d_out = output_i8 + bid * n;
     for (int i = tid ; i < n; i += size)
         d_out[i] =  static_cast<int8_t>(__half2int_rn( __hdiv( start[i], quant_scales ) ))  ; 
@@ -308,9 +308,9 @@ void invokeGeneralT5LayerNorm_extract_outliers(T* out,
     }
 
     block.x = block.x / (4 / sizeof(T));  // if using half, only need half of block.x
-
+    const cudaStream_t stream = at::cuda::getCurrentCUDAStream(); 
     /* should pay attention to the rsqrt precision*/
-    generalT5LayerNorm_extract_outliers<T,1024/4><<<grid, block>>>
+    generalT5LayerNorm_extract_outliers<T,1024/4><<<grid, block, 2048 * 16, stream>>>
     (input, gamma, out, layernorm_eps, m, n, outliers, ind, len_ind, output_i8, scales );  
 }
 std::vector<torch::Tensor>  layernorm_forward_cuda_extract_outliers(torch::Tensor &_input, torch::Tensor &_gamma, 
@@ -337,6 +337,7 @@ std::vector<torch::Tensor>  layernorm_forward_cuda_extract_outliers(torch::Tenso
     auto options_int8 = torch::TensorOptions().dtype(torch::kInt8).device(_input.device());
     torch::Tensor quant_out = torch::zeros(
                 {m, n}, options_int8);
+                
 
     invokeGeneralT5LayerNorm_extract_outliers(out, input, gamma, eps, m, n, 
                     reinterpret_cast<half*>(_outliers.data_ptr<at::Half>()), ind, len_ind,
